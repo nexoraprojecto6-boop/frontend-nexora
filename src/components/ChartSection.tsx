@@ -82,15 +82,16 @@ function calcAll(hist: number[], win: number) {
   }
 }
 
-// Cor da barra baseada na posição relativa (verde=dominante, vermelho=frio, azul=neutro)
+// Cor da barra — escala natural de 3 cores sólidas sem neon
+// Verde escuro (dominante) → cinza azulado (neutro) → vermelho apagado (frio)
 function barColor(pct: number, min: number, max: number): string {
-  if (max === min) return 'rgba(63,116,255,0.55)'
+  if (max === min) return '#4a6fa5'          // azul-cinza neutro
   const t = (pct - min) / (max - min)
-  if (t >= 0.75) return 'rgba(24,201,122,0.85)'
-  if (t >= 0.55) return 'rgba(24,201,122,0.55)'
-  if (t <= 0.25) return 'rgba(233,32,63,0.80)'
-  if (t <= 0.45) return 'rgba(233,32,63,0.50)'
-  return 'rgba(63,116,255,0.50)'
+  if (t >= 0.75) return '#2d8a4e'            // verde escuro — dominante
+  if (t >= 0.55) return '#3a7d5c'            // verde médio
+  if (t <= 0.25) return '#a03030'            // vermelho escuro — mais frio
+  if (t <= 0.45) return '#7a4040'            // vermelho acinzentado
+  return '#4a6fa5'                           // azul-cinza — neutro
 }
 
 // ── Componente principal ──────────────────────────────────────
@@ -383,13 +384,13 @@ export function ChartSection() {
       </div>
 
       {/* ── Gráfico de barras ─────────────────────────────── */}
-      <div style={{ padding: '16px 12px 4px', height: 200, display: 'flex', alignItems: 'flex-end', gap: 5 }}>
+      <div style={{ padding: '10px 10px 4px', height: 150, display: 'flex', alignItems: 'flex-end', gap: 4 }}>
         {bars.map((pct, digit) => {
           const isHot  = digit === info.hotDigit  && info.total >= 10
           const isCold = digit === info.coldDigit && info.total >= 10
           const col    = barColor(pct, minBar, maxBar)
           // Altura relativa: barra mais alta ocupa 85% do container
-          const h = Math.max((pct / (maxBar + 3)) * 160, 3)
+          const h = Math.max((pct / (maxBar + 3)) * 118, 3)
 
           return (
             <div key={digit} style={{
@@ -410,20 +411,10 @@ export function ChartSection() {
                 width: '100%', height: h, position: 'relative',
                 borderRadius: '5px 5px 2px 2px',
                 background: col,
-                // Glow suave nos extremos
-                boxShadow: isHot
-                  ? '0 0 16px rgba(24,201,122,0.55), 0 2px 6px rgba(24,201,122,0.3)'
-                  : isCold
-                    ? '0 0 12px rgba(233,32,63,0.45)'
-                    : 'none',
+                boxShadow: 'none',
                 overflow: 'hidden',
               }}>
-                {/* Reflexo interno (dá profundidade) */}
-                <div style={{
-                  position: 'absolute', top: 0, left: 0, right: 0,
-                  height: '45%',
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.15), transparent)',
-                }} />
+
               </div>
 
               {/* Dígito */}
@@ -452,22 +443,22 @@ export function ChartSection() {
         {panels.map(({ label, val }) => {
           const hot  = val > 54
           const cold = val < 46
-          const col  = hot ? '#18c97a' : cold ? '#ff3a57' : 'var(--text-dim)'
+          const col  = hot ? '#2d8a4e' : cold ? '#a03030' : 'var(--text-dim)'
           return (
-            <div key={label} style={{ background: 'var(--bg-card-hi)', padding: '10px 6px', textAlign: 'center' }}>
+            <div key={label} style={{ background: 'var(--bg-card-hi)', padding: '7px 4px', textAlign: 'center' }}>
               <p style={{ fontSize: 9, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4 }}>
                 {label}
               </p>
-              <p className="tabular" style={{ fontSize: 17, fontWeight: 900, fontFamily: 'var(--font-mono)', color: col, lineHeight: 1 }}>
-                {val.toFixed(1)}<span style={{ fontSize: 10, fontWeight: 400 }}>%</span>
+              <p className="tabular" style={{ fontSize: 15, fontWeight: 900, fontFamily: 'var(--font-mono)', color: col, lineHeight: 1 }}>
+                {val.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 400 }}>%</span>
               </p>
-              <p style={{ fontSize: 9, color: col, marginTop: 2, fontWeight: 700 }}>
+              <p style={{ fontSize: 8, color: col, marginTop: 2, fontWeight: 600 }}>
                 {hot ? '▲ Dom.' : cold ? '▼ Fraco' : '— Neutro'}
               </p>
-              <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
+              <div style={{ height: 2, background: 'var(--border)', borderRadius: 2, marginTop: 5, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', width: `${val}%`, borderRadius: 2,
-                  background: hot ? '#18c97a' : cold ? '#ff3a57' : 'var(--border-hi)',
+                  background: hot ? '#2d8a4e' : cold ? '#a03030' : 'var(--border-hi)',
                   transition: 'width 0.6s ease',
                 }} />
               </div>
@@ -482,11 +473,11 @@ export function ChartSection() {
           display: 'flex', alignItems: 'center', flexWrap: 'wrap',
           gap: 10, padding: '4px 14px 6px',
         }}>
-          <Pill label="🔥" val={info.hotDigit}  color="#18c97a" />
-          <Pill label="❄️" val={info.coldDigit} color="#ff3a57" />
+          <Pill label="🔥" val={info.hotDigit}  color="#2d8a4e" />
+          <Pill label="❄️" val={info.coldDigit} color="#a03030" />
           <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
-          <Pill label="Par"  val={`${info.evenPct.toFixed(0)}%`}  color={info.evenPct > 53 ? '#18c97a' : info.evenPct < 47 ? '#ff3a57' : 'var(--text-dim)'} />
-          <Pill label="Over" val={`${info.overPct.toFixed(0)}%`}  color={info.overPct > 53 ? '#18c97a' : info.overPct < 47 ? '#ff3a57' : 'var(--text-dim)'} />
+          <Pill label="Par"  val={`${info.evenPct.toFixed(0)}%`}  color={info.evenPct > 53 ? '#2d8a4e' : info.evenPct < 47 ? '#a03030' : 'var(--text-dim)'} />
+          <Pill label="Over" val={`${info.overPct.toFixed(0)}%`}  color={info.overPct > 53 ? '#2d8a4e' : info.overPct < 47 ? '#a03030' : 'var(--text-dim)'} />
           <div style={{ marginLeft: 'auto' }}>
             <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
               {Math.min(info.total, win)}/{win}
