@@ -1,14 +1,12 @@
 // ============================================================
 // NEXORA FOREX — WebSocket Hook
 //
-// Comportamento alinhado com as boas práticas da Deriv para
-// WebSocket (ver "WebSocket Best Practices" na documentação):
-//   - ping periódico para manter a ligação viva
-//   - reconexão automática com backoff exponencial
-//   - cada pedido tem req_id implícito tratado pelo backend
-//   - watchdog: força reconexão se a ligação ficar muda
-//   - auth enviada uma única vez por par (token, accountId),
-//     nunca repetida em loop
+// CORRECÇÃO: o backend usa sendToClient(ws, type, payload) que
+// faz JSON.stringify({ type, ...payload }) — ou seja, os campos
+// chegam na RAIZ da mensagem, não aninhados em msg.payload.
+// Exemplo real recebido: { type:'balance', balance:10092.59, currency:'USD' }
+// O hook agora lê da raiz (msg) quando payload está vazio,
+// garantindo que balance e tick são sempre processados.
 // ============================================================
 
 import { useEffect, useRef, useCallback, useState } from 'react'
@@ -64,80 +62,109 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
   }, [])
 
   const handleMessage = useCallback((raw: string) => {
-    let msg: { type?: string; payload?: unknown } = {}
+    let msg: Record<string, unknown> = {}
     try { msg = JSON.parse(raw) } catch { return }
     if (!msg?.type) return
-    const payload = msg.payload ?? {}
+
+    const type = msg.type as string
+    // O backend espalha o payload na raiz: { type, ...payload }
+    // por isso lemos tanto de msg.payload (caso exista) como
+    // directamente de msg para compatibilidade total.
+    const payload = (msg.payload && typeof msg.payload === 'object'
+      ? msg.payload
+      : msg) as Record<string, unknown>
 
     try {
-      switch (msg.type as string) {
+      switch (type) {
+
         case 'bots_list':
-          cbRef.current.onCatalogLoaded?.(payload as CatalogBot[]); break
+          cbRef.current.onCatalogLoaded?.(payload as unknown as CatalogBot[])
+          break
+
         case 'session_bots_list':
-          cbRef.current.onSessionBotsLoaded?.(payload as BotSummary[]); break
+          cbRef.current.onSessionBotsLoaded?.(payload as unknown as BotSummary[])
+          break
+
         case 'bot_created':
-          cbRef.current.onBotStarted?.(payload as BotState & { catalogBotId?: string }); break
+          cbRef.current.onBotStarted?.(payload as unknown as BotState & { catalogBotId?: string })
+          break
+
         case 'bot_stopped':
         case 'bot_paused':
         case 'bot_resumed':
         case 'bot_deleted':
           break
+
         case 'bot_logs': {
           const p = payload as { botId?: string; logs?: BotLogEntry[] }
           if (p.botId && p.logs) cbRef.current.onBotLogs?.(p.botId, p.logs)
           break
         }
+
+        // ── Saldo em tempo real ───────────────────────────────
+        // O backend emite: { type:'balance', balance:10092.59, currency:'USD' }
+        // Os campos estão na raiz (não em payload), por isso lemos
+        // directamente de `msg` além de `payload`.
         case 'balance': {
-          const p = payload as { balance?: number; currency?: string }
-          if (p.balance != null) cbRef.current.onBalance?.(p.balance, p.currency ?? 'USD')
+          const bal = typeof msg.balance === 'number' ? msg.balance
+            : typeof payload.balance === 'number' ? payload.balance
+            : null
+          const cur = typeof msg.currency === 'string' ? msg.currency
+            : typeof payload.currency === 'string' ? payload.currency
+            : 'USD'
+          if (bal != null) cbRef.current.onBalance?.(bal, cur)
           break
         }
+
+        // ── Tick em tempo real ────────────────────────────────
+        // O backend emite: { type:'tick', quote:5123.44, epoch:..., symbol:... }
         case 'tick': {
-          const p = payload as { quote?: number }
-          if (p.quote != null) cbRef.current.onTick?.(p.quote)
+          const quote = typeof msg.quote === 'number' ? msg.quote
+            : typeof payload.quote === 'number' ? payload.quote
+            : null
+          if (quote != null) cbRef.current.onTick?.(quote)
           break
         }
+
         case 'authenticated':
           send('list_bots')
           send('list_session_bots')
           break
+
         case 'deriv_disconnected':
         case 'deriv_reconnected':
           break
+
         case 'pong':
           break
+
         case 'error': {
-          const p = payload as Record<string, unknown>
-          const rootMsg = (msg as Record<string, unknown>)
-          const errMsg = typeof p?.message === 'string' ? p.message
-            : typeof p?.error === 'string' ? p.error
-            : typeof payload === 'string' ? payload
-            : typeof rootMsg?.message === 'string' ? rootMsg.message
+          const errMsg = typeof payload.message === 'string' ? payload.message
+            : typeof payload.error === 'string' ? payload.error
+            : typeof msg.message === 'string' ? msg.message
             : 'Erro desconhecido'
-          const code = typeof p?.code === 'string' ? p.code
-            : typeof rootMsg?.code === 'string' ? rootMsg.code
+          const code = typeof payload.code === 'string' ? payload.code
+            : typeof msg.code === 'string' ? msg.code
             : undefined
           if (code === 'AUTH_FAILED' || code === 'MISSING_TOKEN' || code === 'NO_ACCOUNTS' || code === 'OTP_FAILED') {
             failedAuthKeyRef.current = `${tokenRef.current}:${accountIdRef.current}`
             cbRef.current.onAuthFailed?.()
           }
-          cbRef.current.onError?.(errMsg as string)
+          cbRef.current.onError?.(errMsg)
           break
         }
+
         default:
-          if ((msg.type as string).startsWith('bot:')) {
-            const nested = (payload ?? {}) as Record<string, unknown>
-            const root = (msg as Record<string, unknown>)
-            const botId = typeof nested.botId === 'string' ? nested.botId
-              : typeof root.botId === 'string' ? root.botId : ''
-            const evPayload = Object.keys(nested).length > 0 ? nested : root
-            cbRef.current.onBotEvent?.({ type: msg.type as BotEventType, botId, payload: evPayload })
+          if (type.startsWith('bot:')) {
+            const botId = typeof payload.botId === 'string' ? payload.botId
+              : typeof msg.botId === 'string' ? msg.botId : ''
+            cbRef.current.onBotEvent?.({ type: type as BotEventType, botId, payload })
           } else {
-            console.debug('[NexoraWS] mensagem não tratada:', msg.type, payload)
+            console.debug('[NexoraWS] mensagem não tratada:', type, payload)
           }
       }
     } catch (e) {
-      console.error('[NexoraWS] erro ao processar mensagem:', msg.type, e)
+      console.error('[NexoraWS] erro ao processar mensagem:', type, e)
     }
   }, [send])
 
@@ -149,7 +176,7 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     try {
       ws = new WebSocket(WS_URL)
     } catch (e) {
-      console.error('[NexoraWS] URL de WebSocket inválida:', WS_URL, e)
+      console.error('[NexoraWS] URL inválida:', WS_URL, e)
       setWsStatus('error')
       cbRef.current.onError?.('URL de WebSocket inválida')
       return
@@ -170,14 +197,15 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
         }
       }
       pingRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping', payload: {} }))
+        if (ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: 'ping', payload: {} }))
       }, PING_INTERVAL_MS)
 
       lastMessageAtRef.current = Date.now()
       if (watchdogRef.current) clearInterval(watchdogRef.current)
       watchdogRef.current = setInterval(() => {
         if (Date.now() - lastMessageAtRef.current > WATCHDOG_TIMEOUT_MS) {
-          console.warn('[NexoraWS] Ligação sem resposta — a forçar reconexão')
+          console.warn('[NexoraWS] sem resposta há 40s — reconectando')
           ws.close()
         }
       }, WATCHDOG_INTERVAL_MS)
