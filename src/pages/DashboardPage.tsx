@@ -8,6 +8,7 @@ import { BalanceCard } from '../components/BalanceCard'
 import { ControlsSection } from '../components/ControlsSection'
 import { TradesTable } from '../components/TradesTable'
 import { Footer } from '../components/Footer'
+import { NotificationBar } from '../components/NotificationBar'
 import { useLoader } from '../context/LoaderContext'
 
 // ── DashboardLoader exibido enquanto o auth ainda carrega ─────
@@ -58,6 +59,9 @@ function DashboardInner() {
 
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* ── Aba de notificações — flutua por cima de tudo, estilo vidro ── */}
+      <NotificationBar />
+
       {/* ── Header ── */}
       <header style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -112,8 +116,6 @@ function DashboardInner() {
             padding: 8px 10px;
             overflow-y: auto !important; /* rede de segurança: só entra em acção se algo não couber */
           }
-          /* a coluna esquerda deixa de ser uma "caixa" — os filhos passam a ser
-             itens diretos do flex column do main, permitindo reordenar com "order" */
           .dash-left-col {
             display: contents !important;
           }
