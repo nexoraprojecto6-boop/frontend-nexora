@@ -5,7 +5,6 @@ import { useBots } from '../context/BotsContext'
 export function BalanceCard() {
   const { balance, currency, loading } = useTrading()
   const { sessionBots } = useBots()
-
   const { netPnL, totalWins, totalLosses } = useMemo(() => {
     const active = sessionBots.filter(b => b.stats.totalTrades > 0 || b.status === 'running')
     return {
@@ -14,9 +13,7 @@ export function BalanceCard() {
       totalLosses: active.reduce((s, b) => s + b.stats.losses, 0),
     }
   }, [sessionBots])
-
   const isProfit = netPnL >= 0
-
   return (
     <div className="card" style={{ position: 'relative', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
       {loading && (
@@ -34,16 +31,16 @@ export function BalanceCard() {
         </div>
       )}
       <div style={{ display: 'flex' }}>
-        <div style={{ flex: 1, padding: 16, background: 'var(--bg-card)', borderRight: '1px solid var(--border)' }}>
+        <div style={{ flex: 1, padding: 16, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', minWidth: 0 }}>
           <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>Saldo</p>
-          <p className="tabular" style={{ color: 'var(--white)', fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em' }}>
+          <p className="tabular" style={{ color: 'var(--white)', fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 700, letterSpacing: '-0.01em' }}>
             <span style={{ color: 'var(--text-faint)', fontSize: 16 }}>$</span> {balance.toFixed(2)}{' '}
             <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-dim)' }}>{currency}</span>
           </p>
         </div>
-        <div style={{ flex: 1, padding: 16, background: 'var(--bg-card-hi)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div style={{ flex: 1, padding: 16, background: 'var(--bg-card-hi)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minWidth: 0 }}>
           <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>Lucro/Prejuízo</p>
-          <p className="tabular" style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', color: isProfit ? 'var(--green)' : 'var(--red-hi)' }}>
+          <p className="tabular" style={{ fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 700, letterSpacing: '-0.01em', color: isProfit ? 'var(--green)' : 'var(--red-hi)' }}>
             <span style={{ fontSize: 16, opacity: 0.7 }}>$</span> {netPnL < 0 ? '-' : ''}{Math.abs(netPnL).toFixed(2)}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, color: 'var(--text-dim)', fontSize: 12 }}>
