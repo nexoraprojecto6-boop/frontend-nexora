@@ -158,8 +158,12 @@ export function ControlsSection() {
   const [accLabels, setAccLabels] = useState({ realLabel: 'Real', demoLabel: 'Demo' })
   useEffect(() => { api.getAccountLabels().then(setAccLabels).catch(() => {}) }, [])
 
-  const [showAccDrop, setShowAccDrop] = useState(false)
-  const [showBotDrop, setShowBotDrop] = useState(false)
+  // ── Sheets em vidro (substituem os antigos dropdowns) ──
+  const [showAccSheet, setShowAccSheet] = useState(false)
+  const [showBotSheet, setShowBotSheet] = useState(false)
+  const [switchingAcc, setSwitchingAcc] = useState(false)
+  const [switchingBot, setSwitchingBot] = useState(false)
+
   const [showConfig, setShowConfig] = useState(false)
   const [selectedBot, setSelectedBot] = useState<CatalogBot | null>(null)
   const [pendingConfig, setPendingConfig] = useState<Partial<BotConfig> | null>(null)
@@ -215,7 +219,7 @@ export function ControlsSection() {
   }, [isRunning, progressStep])
 
   // netPnL / totalWins / totalLosses continuam calculados (usados noutros
-  // componentes, ex. BalanceCard) — apenas deixámos de os RENDERIZAR aqui.
+  // componentes, ex. BalanceCard) — apenas não são renderizados aqui.
   const { netPnL, totalWins, totalLosses } = useMemo(() => {
     const active = sessionBots.filter(b => b.stats.totalTrades > 0 || b.status === 'running')
     return {
@@ -239,12 +243,36 @@ export function ControlsSection() {
     setTimeout(() => { startInFlightRef.current = false; setIsStarting(false) }, 8000)
   }
 
-  const handleAccSelect = async (acc: typeof accounts[number]) => {
-    setShowAccDrop(false)
-    if (currentAccount?.account_id === acc.account_id) return
+  // ── Selecionar conta via sheet + loader ──
+  const handleAccSelectSheet = async (acc: typeof accounts[number]) => {
+    if (currentAccount?.account_id === acc.account_id) { setShowAccSheet(false); return }
+    setSwitchingAcc(true)
     const label = acc.is_virtual ? `Conta ${accLabels.demoLabel}` : `Conta ${accLabels.realLabel}`
     loader.show(`A ligar a ${label}…`)
-    try { await setCurrentAccount(acc); loader.complete(`${label} activa!`) } catch { loader.hide() }
+    try {
+      await setCurrentAccount(acc)
+      loader.complete(`${label} activa!`)
+    } catch {
+      loader.hide()
+    } finally {
+      setSwitchingAcc(false)
+      setShowAccSheet(false)
+    }
+  }
+
+  // ── Selecionar estratégia via sheet + loader ──
+  const handleBotSelectSheet = (b: CatalogBot) => {
+    if (selectedBot?.id === b.id) { setShowBotSheet(false); return }
+    setSwitchingBot(true)
+    loader.show('A carregar estratégia…')
+    setTimeout(() => {
+      setSelectedBot(b)
+      setPendingConfig(null)
+      setSessionBotIdSync(null)
+      loader.complete('Estratégia selecionada!')
+      setSwitchingBot(false)
+      setShowBotSheet(false)
+    }, 600)
   }
 
   const accLabel = !currentAccount ? 'Selecionar' : currentAccount.is_virtual ? accLabels.demoLabel : accLabels.realLabel
@@ -271,31 +299,16 @@ export function ControlsSection() {
         )}
 
         <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          <div style={{ position: 'relative' }}>
+          <div>
             <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
-            <button onClick={() => setShowAccDrop(!showAccDrop)} className="btn-ghost" style={{
+            <button onClick={() => setShowAccSheet(true)} className="btn-ghost" style={{
               width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: accColor }}>{accLabel}</span>
             </button>
-            {showAccDrop && (
-              <div className="card" style={{ position: 'absolute', top: '105%', left: 0, right: 0, padding: 4, zIndex: 50 }}>
-                {accounts.map(a => (
-                  <button key={a.account_id} onClick={() => handleAccSelect(a)} style={{
-                    width: '100%', textAlign: 'left', padding: '10px 14px', fontSize: 13, borderRadius: 8,
-                    color: currentAccount?.account_id === a.account_id ? 'var(--green)' : 'var(--text)',
-                  }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--border)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    {a.is_virtual ? `Conta ${accLabels.demoLabel}` : `Conta ${accLabels.realLabel}`}
-                    <span style={{ color: 'var(--text-faint)', fontSize: 11 }}> — ${Number(a.balance ?? 0).toFixed(2)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
-          <div style={{ position: 'relative' }}>
+          <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500 }}>Estratégia</p>
               <button onClick={listCatalogBots} title="Recarregar" style={{ color: 'var(--text-faint)' }}>
@@ -306,7 +319,7 @@ export function ControlsSection() {
                 </svg>
               </button>
             </div>
-            <button onClick={() => setShowBotDrop(!showBotDrop)} className="btn-ghost" style={{
+            <button onClick={() => setShowBotSheet(true)} className="btn-ghost" style={{
               width: '100%', padding: '12px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
             }}>
               {selectedBot ? (
@@ -315,18 +328,6 @@ export function ControlsSection() {
                 <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Selecionar'}</span>
               )}
             </button>
-            {showBotDrop && catalogBots.length > 0 && (
-              <div className="card" style={{ position: 'absolute', top: '105%', left: 0, right: 0, padding: 4, zIndex: 50, maxHeight: 220, overflowY: 'auto' }}>
-                {catalogBots.map(b => (
-                  <button key={b.id}
-                    onClick={() => { setSelectedBot(b); setPendingConfig(null); setSessionBotIdSync(null); setShowBotDrop(false) }}
-                    style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 8, background: selectedBot?.id === b.id ? 'var(--border)' : 'transparent' }}>
-                    <p style={{ fontSize: 13, color: 'var(--white)', fontWeight: 500 }}>{b.name}</p>
-                    <p style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>{STRATEGY_LABELS[b.strategy]}</p>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -383,6 +384,74 @@ export function ControlsSection() {
           </div>
         </div>
       </div>
+
+      {/* ── Sheet em vidro: Selecionar Tipo de Conta ── */}
+      {showAccSheet && (
+        <div className="glass-overlay" onClick={() => !switchingAcc && setShowAccSheet(false)}>
+          <div className="glass-sheet" onClick={e => e.stopPropagation()}>
+            <div className="glass-sheet-header">
+              <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Tipo de Conta</p>
+              {!switchingAcc && (
+                <button onClick={() => setShowAccSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+              )}
+            </div>
+            {switchingAcc ? (
+              <div className="glass-sheet-loader">
+                <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A ligar à conta…</span>
+              </div>
+            ) : (
+              <div className="glass-sheet-body">
+                {accounts.map(a => (
+                  <button key={a.account_id}
+                    className={`glass-option ${currentAccount?.account_id === a.account_id ? 'active' : ''}`}
+                    onClick={() => handleAccSelectSheet(a)}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? 'var(--blue-hi)' : 'var(--green)' }}>
+                      {a.is_virtual ? `Conta ${accLabels.demoLabel}` : `Conta ${accLabels.realLabel}`}
+                    </p>
+                    <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Saldo: ${Number(a.balance ?? 0).toFixed(2)}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sheet em vidro: Selecionar Estratégia ── */}
+      {showBotSheet && (
+        <div className="glass-overlay" onClick={() => !switchingBot && setShowBotSheet(false)}>
+          <div className="glass-sheet" onClick={e => e.stopPropagation()}>
+            <div className="glass-sheet-header">
+              <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Estratégia</p>
+              {!switchingBot && (
+                <button onClick={() => setShowBotSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+              )}
+            </div>
+            {switchingBot ? (
+              <div className="glass-sheet-loader">
+                <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A carregar estratégia…</span>
+              </div>
+            ) : catalogBots.length === 0 ? (
+              <div className="glass-sheet-loader">
+                <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Nenhuma estratégia disponível'}</span>
+              </div>
+            ) : (
+              <div className="glass-sheet-body">
+                {catalogBots.map(b => (
+                  <button key={b.id}
+                    className={`glass-option ${selectedBot?.id === b.id ? 'active' : ''}`}
+                    onClick={() => handleBotSelectSheet(b)}>
+                    <p style={{ fontSize: 14, color: 'var(--white)', fontWeight: 700 }}>{b.name}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{STRATEGY_LABELS[b.strategy]}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showConfig && selectedBot && (
         <ConfigModal bot={selectedBot} onClose={() => setShowConfig(false)} onConfirm={setPendingConfig} />
