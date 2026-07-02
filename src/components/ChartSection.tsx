@@ -1,42 +1,28 @@
 // ============================================================
-// NEXORA FOREX — ChartSection  v3  (Estado Global Sincronizado)
-//
-// COMO FUNCIONA A SINCRONIZAÇÃO GLOBAL:
-//
-//   Quando qualquer utilizador abre a plataforma:
-//   1. Pede os últimos 1000 ticks históricos à Deriv
-//      (ticks_history). A Deriv devolve EXACTAMENTE os mesmos
-//      1000 preços para toda a gente — não importa quando
-//      abriram a página.
-//   2. As barras SALTAM imediatamente para os valores correctos
-//      (sem animar do zero). O gráfico aparece já no estado real.
-//   3. Subscreve o feed ao vivo. A partir daí, cada tick novo
-//      move as barras suavemente.
-//
-//   Resultado: todos os utilizadores vêem o mesmo gráfico,
-//   os mesmos números, o mesmo movimento — em permanência.
-//   Mesmo quem recarrega a página vê o mesmo estado.
-//
-// ANIMAÇÃO:
-//   - Carregamento inicial → barras aparecem instantaneamente
-//     no valor real (sem crescer do zero)
-//   - Novos ticks ao vivo → RAF com easing suave (factor 0.09)
-//     para movimento fluido e natural
-//
-// FUTURO: trocar PUBLIC_WS pelo backend → o backend mantém o
-//   histórico e transmite para todos, sem depender de cada
-//   cliente ir buscar o histórico individualmente à Deriv.
+// NEXORA FOREX — ChartSection  v4
+// Design: igual à imagem de referência
+//   - Barras neutras: cinza claro (#b8bcc8)
+//   - Barra hot (máx): verde sólido (#2e7d32)
+//   - Barras cold (mín): vermelho sólido (#c62828)
+//   - Sem gradientes, sem glow, sem neon — flat e limpo
+//   - Header: ícone | Last Digits: X | N ticks | selector
+// Lógica de dados: idêntica (WS pública + ticks_history)
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 
 // ── Config ───────────────────────────────────────────────────
-const PUBLIC_WS     = 'wss://api.derivws.com/trading/v1/options/ws/public'
-const HISTORY_LOAD  = 1000   // ticks carregados ao entrar (base sincronizada)
-const STRIP_SIZE    = 30     // dígitos na tira inferior
-const SMOOTH        = 0.09   // suavidade da animação live (menor = mais suave)
-const PING_MS       = 25_000
-const RECONNECT_MS  = 2_500
+const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
+const HISTORY_LOAD = 1000
+const STRIP_SIZE   = 30
+const SMOOTH       = 0.09
+const PING_MS      = 25_000
+const RECONNECT_MS = 2_500
+
+// Cores exactas da imagem de referência
+const COLOR_HOT     = '#2e7d32'   // verde sólido — barra dominante
+const COLOR_COLD    = '#c62828'   // vermelho sólido — barras mais fracas
+const COLOR_NEUTRAL = '#b8bcc8'   // cinza claro — barras neutras
 
 const SYMBOLS = [
   { value: '1HZ100V', label: 'Vol 100 (1s)' },
@@ -69,9 +55,9 @@ function calcAll(hist: number[], win: number) {
   const counts = Array(10).fill(0) as number[]
   let even = 0, over = 0
   slice.forEach(d => { counts[d]++; if (d % 2 === 0) even++; if (d >= 5) over++ })
-  const pcts    = counts.map(c => (c / n) * 100)
-  const maxPct  = Math.max(...pcts)
-  const minPct  = Math.min(...pcts)
+  const pcts   = counts.map(c => (c / n) * 100)
+  const maxPct = Math.max(...pcts)
+  const minPct = Math.min(...pcts)
   return {
     pcts, maxPct, minPct,
     hotDigit:  pcts.indexOf(maxPct),
@@ -82,38 +68,37 @@ function calcAll(hist: number[], win: number) {
   }
 }
 
-// Cor da barra — escala natural de 3 cores sólidas sem neon
-// Verde escuro (dominante) → cinza azulado (neutro) → vermelho apagado (frio)
-function barColor(pct: number, min: number, max: number): string {
-  if (max === min) return '#4a6fa5'          // azul-cinza neutro
-  const t = (pct - min) / (max - min)
-  if (t >= 0.75) return '#2d8a4e'            // verde escuro — dominante
-  if (t >= 0.55) return '#3a7d5c'            // verde médio
-  if (t <= 0.25) return '#a03030'            // vermelho escuro — mais frio
-  if (t <= 0.45) return '#7a4040'            // vermelho acinzentado
-  return '#4a6fa5'                           // azul-cinza — neutro
-}
+// ── Ícones inline (sem dependências externas) ─────────────────
+const IconBar = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="2"  y="12" width="4" height="10" rx="1"/>
+    <rect x="9"  y="7"  width="4" height="15" rx="1"/>
+    <rect x="16" y="3"  width="4" height="19" rx="1"/>
+  </svg>
+)
+const IconChevron = ({ up }: { up?: boolean }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <path d={up ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}/>
+  </svg>
+)
 
 // ── Componente principal ──────────────────────────────────────
 export function ChartSection() {
   const [symbol,  setSymbol]  = useState('1HZ100V')
-  const [win,     setWin]     = useState(100)
+  const [win,     setWin]     = useState(25)
   const [phase,   setPhase]   = useState<'connecting'|'loading'|'live'|'error'>('connecting')
   const [quote,   setQuote]   = useState<number | null>(null)
   const [tkCnt,   setTkCnt]   = useState(0)
   const [strip,   setStrip]   = useState<number[]>([])
-  const [info,    setInfo]    = useState(() => calcAll([], 100))
-  // Estado das barras exibidas — animadas pelo RAF
+  const [info,    setInfo]    = useState(() => calcAll([], 25))
   const [bars,    setBars]    = useState<number[]>(Array(10).fill(0))
-
-  const [symOpen, setSymOpen] = useState(false)
   const [winOpen, setWinOpen] = useState(false)
 
-  // Refs internas — não causam re-render
+  // Refs internas
   const hist      = useRef<number[]>([])
-  const target    = useRef<number[]>(Array(10).fill(0))   // destino das barras
-  const current   = useRef<number[]>(Array(10).fill(0))   // barras animadas actuais
-  const animating = useRef(false)                          // flag: há animação a correr?
+  const target    = useRef<number[]>(Array(10).fill(0))
+  const current   = useRef<number[]>(Array(10).fill(0))
+  const animating = useRef(false)
   const wsRef     = useRef<WebSocket | null>(null)
   const pingRef   = useRef<ReturnType<typeof setInterval> | null>(null)
   const reconnRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -123,11 +108,10 @@ export function ChartSection() {
   winRef.current  = win
   symRef.current  = symbol
 
-  // ── RAF — só corre quando há mudança a animar ────────────
+  // ── RAF — animação suave apenas em novos ticks ─────────────
   const startRaf = useCallback(() => {
-    if (animating.current) return  // já a correr
+    if (animating.current) return
     animating.current = true
-
     const tick = () => {
       if (!mounted.current) { animating.current = false; return }
       const c = current.current
@@ -138,40 +122,25 @@ export function ChartSection() {
         if (Math.abs(d) > 0.01) { c[i] += d * SMOOTH; dirty = true }
         else c[i] = t[i]
       }
-      if (dirty) {
-        setBars([...c])
-        requestAnimationFrame(tick)
-      } else {
-        // Chegou ao destino — para o RAF
-        setBars([...c])
-        animating.current = false
-      }
+      if (dirty) { setBars([...c]); requestAnimationFrame(tick) }
+      else       { setBars([...c]); animating.current = false }
     }
     requestAnimationFrame(tick)
   }, [])
 
-  // ── Aplica novo estado de percentagens às barras ─────────
-  // snap=true → sem animação (carregamento inicial do histórico)
-  // snap=false → anima suavemente (novos ticks ao vivo)
   const applyPcts = useCallback((pcts: number[], snap = false) => {
     target.current = [...pcts]
-    if (snap) {
-      current.current = [...pcts]
-      setBars([...pcts])
-    } else {
-      startRaf()
-    }
+    if (snap) { current.current = [...pcts]; setBars([...pcts]) }
+    else startRaf()
   }, [startRaf])
 
-  // ── Processa um tick ao vivo ──────────────────────────────
   const onTick = useCallback((price: number) => {
     const d = lastDigit(price)
     hist.current.push(d)
     if (hist.current.length > 5000) hist.current = hist.current.slice(-5000)
-
     const pcts = calcPcts(hist.current, winRef.current)
     const all  = calcAll(hist.current, winRef.current)
-    applyPcts(pcts, false)  // ← animação suave
+    applyPcts(pcts, false)
     setInfo(all)
     setQuote(price)
     setTkCnt(hist.current.length)
@@ -179,9 +148,8 @@ export function ChartSection() {
     setPhase('live')
   }, [applyPcts])
 
-  // ── Conectar à Deriv e carregar histórico ─────────────────
   const connect = useCallback((sym: string) => {
-    if (pingRef.current)  clearInterval(pingRef.current)
+    if (pingRef.current)   clearInterval(pingRef.current)
     if (reconnRef.current) clearTimeout(reconnRef.current)
     if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
 
@@ -192,21 +160,8 @@ export function ChartSection() {
     ws.onopen = () => {
       if (!mounted.current) { ws.close(); return }
       setPhase('loading')
-
-      // ── Passo 1: histórico (base sincronizada) ───────────
-      // Todos os utilizadores pedem os mesmos HISTORY_LOAD
-      // ticks mais recentes → base idêntica para todos.
-      ws.send(JSON.stringify({
-        ticks_history: sym,
-        end:   'latest',
-        count:  HISTORY_LOAD,
-        style: 'ticks',
-        req_id: 1,
-      }))
-
-      // ── Passo 2: subscrição ao vivo ──────────────────────
+      ws.send(JSON.stringify({ ticks_history: sym, end: 'latest', count: HISTORY_LOAD, style: 'ticks', req_id: 1 }))
       ws.send(JSON.stringify({ ticks: sym, subscribe: 1, req_id: 2 }))
-
       pingRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }))
       }, PING_MS)
@@ -215,32 +170,23 @@ export function ChartSection() {
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data as string)
       if (msg.error) return
-
-      // Histórico carregado → snap imediato (sem animar do zero)
       if (msg.msg_type === 'history' && Array.isArray(msg.history?.prices)) {
-        const prices: number[] = msg.history.prices
-        hist.current = prices.map(lastDigit)
+        hist.current = (msg.history.prices as number[]).map(lastDigit)
         const pcts = calcPcts(hist.current, winRef.current)
         const all  = calcAll(hist.current, winRef.current)
-
-        // SNAP: barras aparecem instantaneamente no valor real
-        // Nenhum utilizador vê as barras a crescer do zero.
-        applyPcts(pcts, true)
+        applyPcts(pcts, true)   // snap — sem animar do zero
         setInfo(all)
         setTkCnt(hist.current.length)
         setStrip(hist.current.slice(-STRIP_SIZE))
         setPhase('live')
         return
       }
-
-      // Tick ao vivo → animação suave
       if (msg.msg_type === 'tick' && msg.tick?.quote != null) {
         onTick(msg.tick.quote as number)
       }
     }
 
     ws.onerror = () => { if (mounted.current) setPhase('error') }
-
     ws.onclose = () => {
       if (!mounted.current) return
       if (pingRef.current) clearInterval(pingRef.current)
@@ -248,7 +194,6 @@ export function ChartSection() {
     }
   }, [applyPcts, onTick])
 
-  // Muda símbolo → reinicia
   useEffect(() => {
     hist.current    = []
     target.current  = Array(10).fill(0)
@@ -257,299 +202,197 @@ export function ChartSection() {
     setStrip([])
     setTkCnt(0)
     setQuote(null)
-    setInfo(calcAll([], 100))
+    setInfo(calcAll([], win))
     connect(symbol)
   }, [symbol]) // eslint-disable-line
 
-  // Mount / unmount
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
-      if (pingRef.current)  clearInterval(pingRef.current)
+      if (pingRef.current)   clearInterval(pingRef.current)
       if (reconnRef.current) clearTimeout(reconnRef.current)
       if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
     }
   }, [])
 
-  // Recalcula ao mudar janela (sem reconectar)
   useEffect(() => {
     if (hist.current.length === 0) return
     const pcts = calcPcts(hist.current, win)
     const all  = calcAll(hist.current, win)
-    applyPcts(pcts, false)  // animação suave ao mudar janela
+    applyPcts(pcts, false)
     setInfo(all)
   }, [win, applyPcts])
 
-  // ── Render ────────────────────────────────────────────────
-  const symLabel = SYMBOLS.find(s => s.value === symbol)?.label ?? symbol
-  const maxBar   = Math.max(...bars, 14)
-  const minBar   = Math.min(...bars)
+  // Cor de cada barra — flat, sem gradiente
+  const maxPct = info.maxPct
+  const minPct = info.minPct
 
-  const panels = [
-    { label: 'Par',     val: info.evenPct,               opp: 100 - info.evenPct },
-    { label: 'Ímpar',   val: 100 - info.evenPct,         opp: info.evenPct },
-    { label: 'Over 5',  val: info.overPct,               opp: 100 - info.overPct },
-    { label: 'Under 5', val: 100 - info.overPct,         opp: info.overPct },
-  ]
+  function getBarColor(pct: number): string {
+    if (Math.abs(pct - maxPct) < 0.01) return COLOR_HOT
+    if (Math.abs(pct - minPct) < 0.01) return COLOR_COLD
+    return COLOR_NEUTRAL
+  }
+
+  const lastD    = strip.length > 0 ? strip[strip.length - 1] : null
+  const maxBar   = Math.max(...bars, 10)
+  const symLabel = SYMBOLS.find(s => s.value === symbol)?.label ?? symbol
 
   return (
     <div className="card" style={{ overflow: 'visible' }}>
 
       {/* ── Header ─────────────────────────────────────────── */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', gap: 10,
         padding: '10px 14px', borderBottom: '1px solid var(--border)',
       }}>
-        {/* Símbolo + status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Ícone + estado */}
+        <div style={{
+          width: 34, height: 34, borderRadius: 8,
+          background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--text-dim)', flexShrink: 0,
+        }}>
+          <IconBar />
+        </div>
+
+        {/* Label central */}
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <span style={{ color: 'var(--white)', fontSize: 15, fontWeight: 700 }}>
+            Last Digits:{' '}
+            <span style={{ color: lastD !== null ? COLOR_HOT : 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              {lastD !== null ? lastD : '—'}
+            </span>
+          </span>
+        </div>
+
+        {/* Contagem + selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 600 }}>
+            {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
+          </span>
           <div style={{ position: 'relative' }}>
-            <button onClick={() => { setSymOpen(o => !o); setWinOpen(false) }} style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+            <button onClick={() => setWinOpen(o => !o)} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 28, height: 28, borderRadius: 7,
               background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
-              borderRadius: 8, cursor: 'pointer',
+              cursor: 'pointer', color: 'var(--text-dim)',
             }}>
-              <span className={`dot ${phase === 'live' ? 'live' : phase === 'error' ? 'off' : 'warn'}`}
-                style={{ width: 6, height: 6 }} />
-              <span style={{ color: 'var(--white)', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                {symLabel}
-              </span>
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="none"
-                style={{ transform: symOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}>
-                <path d="M2 3.5L5 6.5L8 3.5" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <IconChevron up={winOpen} />
             </button>
-            {symOpen && (
-              <div className="card" style={{ position: 'absolute', top: '110%', left: 0, zIndex: 70, padding: 4, minWidth: 148 }}>
-                {SYMBOLS.map(s => (
-                  <button key={s.value} onClick={() => { setSymbol(s.value); setSymOpen(false) }}
+            {winOpen && (
+              <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 70, padding: 4, minWidth: 100 }}>
+                {WINDOWS.map(w => (
+                  <button key={w} onClick={() => { setWin(w); setWinOpen(false) }}
                     style={{
-                      width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, fontSize: 13,
-                      color: symbol === s.value ? 'var(--blue-hi)' : 'var(--text)',
-                      fontWeight: symbol === s.value ? 700 : 400, background: 'transparent',
+                      width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8,
+                      fontSize: 13, background: 'transparent',
+                      color: win === w ? 'var(--blue-hi)' : 'var(--text)',
+                      fontWeight: win === w ? 700 : 400,
                     }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--border)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    {s.label}
+                    {w}
                   </button>
                 ))}
               </div>
             )}
           </div>
-
-          {quote !== null && (
-            <span className="tabular" style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-              {quote.toFixed(2)}
-            </span>
-          )}
-
-          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
-            {phase === 'connecting' ? 'A ligar...' :
-             phase === 'loading'    ? 'A carregar histórico...' :
-             phase === 'error'      ? 'Erro — reconectando...' :
-             `${tkCnt.toLocaleString()} ticks`}
-          </span>
-        </div>
-
-        {/* Janela */}
-        <div style={{ position: 'relative' }}>
-          <button onClick={() => { setWinOpen(o => !o); setSymOpen(false) }} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-            background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
-            borderRadius: 8, cursor: 'pointer',
-          }}>
-            <span style={{ color: 'var(--white)', fontSize: 13, fontWeight: 700 }}>{win} ticks</span>
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none"
-              style={{ transform: winOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}>
-              <path d="M2 3.5L5 6.5L8 3.5" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-          {winOpen && (
-            <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 70, padding: 4, minWidth: 110 }}>
-              {WINDOWS.map(w => (
-                <button key={w} onClick={() => { setWin(w); setWinOpen(false) }}
-                  style={{
-                    width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, fontSize: 13,
-                    color: win === w ? 'var(--blue-hi)' : 'var(--text)',
-                    fontWeight: win === w ? 700 : 400, background: 'transparent',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--border)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  {w}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
       {/* ── Gráfico de barras ─────────────────────────────── */}
-      <div style={{ padding: '10px 10px 4px', height: 150, display: 'flex', alignItems: 'flex-end', gap: 4 }}>
+      <div style={{ padding: '8px 14px 4px', height: 220, display: 'flex', alignItems: 'flex-end', gap: 6 }}>
         {bars.map((pct, digit) => {
-          const isHot  = digit === info.hotDigit  && info.total >= 10
-          const isCold = digit === info.coldDigit && info.total >= 10
-          const col    = barColor(pct, minBar, maxBar)
-          // Altura relativa: barra mais alta ocupa 85% do container
-          const h = Math.max((pct / (maxBar + 3)) * 118, 3)
+          const color = getBarColor(pct)
+          // Altura relativa — barra mais alta preenche ~80% do espaço
+          const barH = Math.max((pct / (maxBar + 2)) * 170, 4)
 
           return (
             <div key={digit} style={{
               flex: 1, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'flex-end', gap: 2, height: '100%',
+              alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%',
             }}>
-              {/* Percentagem */}
+              {/* Percentagem — topo da barra */}
               <span className="tabular" style={{
-                fontSize: 8, fontWeight: 800, fontFamily: 'var(--font-mono)', lineHeight: 1,
-                color: isHot ? '#18c97a' : isCold ? '#ff3a57' : 'var(--text-faint)',
-                minHeight: 10,
+                fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                color: 'var(--text-dim)', lineHeight: 1, minHeight: 14,
               }}>
-                {pct.toFixed(1)}
+                {pct.toFixed(1)}%
               </span>
 
-              {/* Barra animada */}
+              {/* Barra — flat, sem sombra */}
               <div style={{
-                width: '100%', height: h, position: 'relative',
-                borderRadius: '5px 5px 2px 2px',
-                background: col,
-                boxShadow: 'none',
-                overflow: 'hidden',
-              }}>
-
-              </div>
+                width: '100%',
+                height: barH,
+                background: color,
+                borderRadius: '4px 4px 2px 2px',
+                flexShrink: 0,
+              }} />
 
               {/* Dígito */}
               <span className="tabular" style={{
-                fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)', lineHeight: 1,
-                color: isHot ? '#18c97a' : isCold ? '#ff3a57' : 'var(--text-dim)',
+                fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                color: 'var(--text-dim)', lineHeight: 1,
               }}>
                 {digit}
               </span>
+            </div>
+          )
+        })}
+      </div>
 
-              {/* Ícone hot/cold */}
-              <span style={{ fontSize: 9, lineHeight: 1, height: 11 }}>
-                {isHot ? '🔥' : isCold ? '❄️' : ''}
+      {/* ── Rodapé: símbolo + tira de dígitos ─────────────── */}
+      <div style={{ borderTop: '1px solid var(--border)', padding: '8px 14px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Selector de símbolo */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button onClick={() => setWinOpen(false)} style={{ background: 'none', padding: 0, cursor: 'default' }}>
+              <select value={symbol} onChange={e => setSymbol(e.target.value)} style={{
+                background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
+                borderRadius: 7, padding: '4px 8px', fontSize: 11, fontWeight: 600,
+                color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
+              }}>
+                {SYMBOLS.map(s => (
+                  <option key={s.value} value={s.value} style={{ background: 'var(--bg-card)' }}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </button>
+          </div>
+
+          {/* Tira de últimos dígitos */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flex: 1 }}>
+            {strip.length === 0 ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>
+                {phase === 'connecting' ? 'A ligar...'
+                 : phase === 'loading' ? 'A carregar...'
+                 : phase === 'error'   ? 'Erro...'
+                 : 'Aguardando...'}
               </span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ── Painéis de análise ────────────────────────────── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4,1fr)',
-        gap: 1, margin: '8px 10px', borderRadius: 10, overflow: 'hidden',
-        border: '1px solid var(--border)',
-      }}>
-        {panels.map(({ label, val }) => {
-          const hot  = val > 54
-          const cold = val < 46
-          const col  = hot ? '#2d8a4e' : cold ? '#a03030' : 'var(--text-dim)'
-          return (
-            <div key={label} style={{ background: 'var(--bg-card-hi)', padding: '7px 4px', textAlign: 'center' }}>
-              <p style={{ fontSize: 9, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4 }}>
-                {label}
-              </p>
-              <p className="tabular" style={{ fontSize: 15, fontWeight: 900, fontFamily: 'var(--font-mono)', color: col, lineHeight: 1 }}>
-                {val.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 400 }}>%</span>
-              </p>
-              <p style={{ fontSize: 8, color: col, marginTop: 2, fontWeight: 600 }}>
-                {hot ? '▲ Dom.' : cold ? '▼ Fraco' : '— Neutro'}
-              </p>
-              <div style={{ height: 2, background: 'var(--border)', borderRadius: 2, marginTop: 5, overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', width: `${val}%`, borderRadius: 2,
-                  background: hot ? '#2d8a4e' : cold ? '#a03030' : 'var(--border-hi)',
-                  transition: 'width 0.6s ease',
-                }} />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ── Linha de resumo rápida ────────────────────────── */}
-      {info.total >= 25 && (
-        <div style={{
-          display: 'flex', alignItems: 'center', flexWrap: 'wrap',
-          gap: 10, padding: '4px 14px 6px',
-        }}>
-          <Pill label="🔥" val={info.hotDigit}  color="#2d8a4e" />
-          <Pill label="❄️" val={info.coldDigit} color="#a03030" />
-          <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
-          <Pill label="Par"  val={`${info.evenPct.toFixed(0)}%`}  color={info.evenPct > 53 ? '#2d8a4e' : info.evenPct < 47 ? '#a03030' : 'var(--text-dim)'} />
-          <Pill label="Over" val={`${info.overPct.toFixed(0)}%`}  color={info.overPct > 53 ? '#2d8a4e' : info.overPct < 47 ? '#a03030' : 'var(--text-dim)'} />
-          <div style={{ marginLeft: 'auto' }}>
-            <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
-              {Math.min(info.total, win)}/{win}
-            </span>
+            ) : strip.map((d, i) => {
+              const isNew  = i === strip.length - 1
+              const isHot  = d === info.hotDigit  && info.total >= 10
+              const isCold = d === info.coldDigit && info.total >= 10
+              return (
+                <span key={i} className="tabular" style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, fontFamily: 'var(--font-mono)',
+                  width: isNew ? 26 : 21, height: isNew ? 26 : 21,
+                  fontSize: isNew ? 13 : 11, fontWeight: 700, borderRadius: 5,
+                  background: isNew ? 'rgba(46,125,50,0.2)' : 'var(--bg-card-hi)',
+                  color: isNew ? COLOR_HOT : isHot ? COLOR_HOT : isCold ? COLOR_COLD : 'var(--text-dim)',
+                  border: `1px solid ${isNew ? 'rgba(46,125,50,0.5)' : 'var(--border)'}`,
+                  opacity: 0.35 + (i / strip.length) * 0.65,
+                }}>
+                  {d}
+                </span>
+              )
+            })}
           </div>
         </div>
-      )}
-
-      {/* ── Tira de dígitos ───────────────────────────────── */}
-      <div style={{
-        borderTop: '1px solid var(--border)', padding: '10px 12px 13px',
-        background: 'rgba(0,0,0,0.15)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflowX: 'auto' }}>
-          <span style={{
-            fontSize: 9, fontWeight: 700, color: 'var(--text-faint)',
-            textTransform: 'uppercase', letterSpacing: 1.5, flexShrink: 0,
-          }}>
-            Últimos
-          </span>
-
-          {strip.length === 0 ? (
-            <span style={{ color: 'var(--text-faint)', fontSize: 11, fontStyle: 'italic' }}>
-              {phase === 'connecting' ? 'A ligar...'
-               : phase === 'loading' ? 'A carregar histórico...'
-               : phase === 'error'   ? 'Erro de ligação'
-               : 'Aguardando...'}
-            </span>
-          ) : strip.map((d, i) => {
-            const isNew  = i === strip.length - 1
-            const isHot  = d === info.hotDigit  && info.total >= 10
-            const isCold = d === info.coldDigit && info.total >= 10
-            const bg  = isNew ? 'rgba(24,87,255,0.28)'
-                      : isHot  ? 'rgba(24,201,122,0.14)'
-                      : isCold ? 'rgba(233,32,63,0.14)'
-                      : 'var(--bg-card-hi)'
-            const col = isNew ? '#3f74ff'
-                      : isHot  ? '#18c97a'
-                      : isCold ? '#ff3a57'
-                      : 'var(--text-dim)'
-            const bdr = isNew ? '1px solid rgba(24,87,255,0.55)'
-                      : isHot  ? '1px solid rgba(24,201,122,0.35)'
-                      : isCold ? '1px solid rgba(233,32,63,0.35)'
-                      : '1px solid var(--border)'
-            return (
-              <span key={i} className="tabular" style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, fontFamily: 'var(--font-mono)',
-                width: isNew ? 28 : 22, height: isNew ? 28 : 22,
-                fontSize: isNew ? 14 : 11, fontWeight: 800,
-                borderRadius: 7, background: bg, color: col, border: bdr,
-                transform: isNew ? 'scale(1.08)' : undefined,
-                opacity: 0.3 + (i / strip.length) * 0.7,
-                boxShadow: isNew ? '0 0 10px rgba(24,87,255,0.45)' : 'none',
-              }}>
-                {d}
-              </span>
-            )
-          })}
-        </div>
       </div>
-    </div>
-  )
-}
-
-function Pill({ label, val, color }: { label: string; val: string | number; color: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{label}</span>
-      <span className="tabular" style={{ fontSize: 13, fontWeight: 800, color, fontFamily: 'var(--font-mono)' }}>
-        {val}
-      </span>
     </div>
   )
 }
