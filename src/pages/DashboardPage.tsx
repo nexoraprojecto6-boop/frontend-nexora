@@ -79,25 +79,61 @@ function DashboardInner() {
         </button>
       </header>
 
-      {/* ── Desktop layout (≥1024px): chart+controls à esquerda, trades à direita ── */}
-      <main style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+      {/* ── Desktop layout (≥1024px): chart+controls à esquerda, trades à direita ──
+          Mobile (<1024px): ordem controlada via CSS (order), ver <style> abaixo.
+          Ordem mobile: Chart → Balance → Trades (rolável) → Controls (conexão Deriv) → Footer */}
+      <main className="dash-main" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {/* Coluna esquerda */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 16px', gap: 12, overflowY: 'auto', minWidth: 0 }}>
-          <ChartSection />
-          <BalanceCard />
-          <ControlsSection />
-          <Footer />
+        <div className="dash-left-col" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 16px', gap: 12, overflowY: 'auto', minWidth: 0 }}>
+          <div className="dash-chart">
+            <ChartSection />
+          </div>
+          <div className="dash-balance">
+            <BalanceCard />
+          </div>
+          <div className="dash-controls">
+            <ControlsSection />
+          </div>
+          <div className="dash-footer">
+            <Footer />
+          </div>
         </div>
-        {/* Coluna direita — trades table (só desktop) */}
-        <div style={{ width: 380, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+        {/* Coluna direita — trades table (desktop) / vira card rolável no mobile */}
+        <div className="dash-trades" style={{ width: 380, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
           <TradesTable />
         </div>
       </main>
 
       <style>{`
         @media (max-width: 1023px) {
-          main { flex-direction: column !important; }
-          main > div:last-child { width: 100% !important; border-left: none !important; border-top: 1px solid var(--border) !important; min-height: 220px !important; max-height: 280px !important; }
+          .dash-main {
+            flex-direction: column !important;
+            gap: 8px;
+            padding: 8px 10px;
+            overflow-y: auto !important; /* rede de segurança: só entra em acção se algo não couber */
+          }
+          /* a coluna esquerda deixa de ser uma "caixa" — os filhos passam a ser
+             itens diretos do flex column do main, permitindo reordenar com "order" */
+          .dash-left-col {
+            display: contents !important;
+          }
+          .dash-chart    { order: 1; flex-shrink: 0; }
+          .dash-balance  { order: 2; flex-shrink: 0; }
+          .dash-trades   { order: 3; }
+          .dash-controls { order: 4; flex-shrink: 0; }
+          .dash-footer   { order: 5; flex-shrink: 0; }
+
+          .dash-trades {
+            width: 100% !important;
+            border-left: none !important;
+            border-top: 1px solid var(--border) !important;
+            flex: 1 1 220px !important;
+            min-height: 180px !important;
+            max-height: none !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .dash-trades { min-height: 150px !important; }
         }
         .sm-show { display: inline !important; }
       `}</style>
