@@ -266,7 +266,7 @@ export function ControlsSection() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           <div style={{ position: 'relative' }}>
             <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
             <button onClick={() => setShowAccDrop(!showAccDrop)} className="btn-ghost" style={{
@@ -330,7 +330,7 @@ export function ControlsSection() {
 
           <div>
             <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Risco</p>
-            <button className="btn-danger" style={{ width: '100%', padding: '12px', fontSize: 12 }}>
+            <button className="btn-ghost" style={{ width: '100%', padding: '12px', fontSize: 12, color: 'var(--text)' }}>
               {pendingConfig ? 'Personalizado' : 'Padrão'}
             </button>
           </div>
@@ -390,7 +390,7 @@ export function ControlsSection() {
         </div>
 
         {sessionBots.some(b => b.stats.totalTrades > 0 || b.status === 'running') && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 12px', borderRadius: 12, background: 'var(--bg-card-hi)', border: '1px solid var(--border)' }}>
+          <div className="stats-strip" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 12px', borderRadius: 12, background: 'var(--bg-card-hi)', border: '1px solid var(--border)' }}>
             <div>
               <p style={{ color: 'var(--text-faint)', fontSize: 10 }}>Lucro/Prejuízo</p>
               <p className="tabular" style={{ fontSize: 15, fontWeight: 700, color: netPnL >= 0 ? 'var(--green)' : 'var(--red-hi)' }}>
