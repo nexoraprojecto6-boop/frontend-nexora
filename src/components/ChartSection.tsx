@@ -299,11 +299,10 @@ export function ChartSection() {
       </div>
 
       {/* ── Gráfico de barras ─────────────────────────────── */}
-      <div style={{ padding: '8px 14px 4px', height: 220, display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+      <div className="chart-bars-wrap" style={{ padding: '8px 14px 4px', display: 'flex', alignItems: 'flex-end', gap: 6 }}>
         {bars.map((pct, digit) => {
           const color = getBarColor(pct)
-          // Altura relativa — barra mais alta preenche ~80% do espaço
-          const barH = Math.max((pct / (maxBar + 2)) * 170, 4)
+          const ratio = pct / (maxBar + 2)
 
           return (
             <div key={digit} style={{
@@ -318,10 +317,10 @@ export function ChartSection() {
                 {pct.toFixed(1)}%
               </span>
 
-              {/* Barra — flat, sem sombra */}
+              {/* Barra — flat, sem sombra. Altura via CSS var, ajustável por breakpoint */}
               <div style={{
                 width: '100%',
-                height: barH,
+                height: `max(4px, calc(var(--chart-bar-max) * ${ratio.toFixed(4)}))`,
                 background: color,
                 borderRadius: '4px 4px 2px 2px',
                 flexShrink: 0,
