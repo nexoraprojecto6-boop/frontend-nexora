@@ -194,3 +194,34 @@ a {
 .dot.live { background: var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
 .dot.off  { background: var(--red); }
 .dot.warn { background: #f5a623; }
+
+/* ============================================================
+   MOBILE RESPONSIVE — ajustes de tamanho/organização
+   (nenhuma lógica de negócio foi alterada, apenas CSS)
+   ============================================================ */
+
+/* Gráfico: altura ajustável por breakpoint, dá prioridade ao
+   espaço da tela para os demais componentes caberem sem cortar */
+.chart-bars-wrap {
+  --chart-h: 220px;
+  --chart-bar-max: 170px;
+  height: var(--chart-h);
+}
+@media (max-width: 1023px) {
+  .chart-bars-wrap { --chart-h: 170px; --chart-bar-max: 125px; }
+}
+@media (max-width: 480px) {
+  .chart-bars-wrap { --chart-h: 145px; --chart-bar-max: 100px; }
+}
+
+/* Segurança extra contra scroll horizontal em telas pequenas */
+@media (max-width: 1023px) {
+  .card { max-width: 100%; }
+}
+
+/* Grid de controles (Tipo de Conta / Estratégia / Risco) e a
+   faixa de estatísticas ficam mais compactas em telas estreitas */
+@media (max-width: 480px) {
+  .controls-grid { gap: 8px; }
+  .stats-strip { gap: 10px; padding: 8px 10px; flex-wrap: wrap; }
+}
