@@ -47,32 +47,34 @@ export function TradesTable() {
               <p style={{ fontSize: 12, color: 'var(--text-faint)' }}>Selecciona um bot e toca em play para começar</p>
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
-                <tr style={{ color: 'var(--text-dim)', fontSize: 12, borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Hora</th>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Tipo</th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Tick Final</th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Preço</th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Resultado</th>
-                </tr>
-              </thead>
-              <tbody style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}>
-                {trades.map((t: TradeRecord, i: number) => (
-                  <tr key={`${t.id}-${i}`} style={{ borderBottom: '1px solid rgba(31,44,74,0.4)' }}>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{t.hora}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{t.contractType ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-dim)' }}>
-                      {typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : '—'}
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-faint)' }}>{t.stake.toFixed(2)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? 'var(--green)' : 'var(--red-hi)' }}>
-                      {t.profit >= 0 ? '' : '-'}{Math.abs(t.profit).toFixed(2)}
-                    </td>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
+                  <tr style={{ color: 'var(--text-dim)', fontSize: 12, borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Hora</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Tipo</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Tick Final</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Preço</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Resultado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}>
+                  {trades.map((t: TradeRecord, i: number) => (
+                    <tr key={`${t.id}-${i}`} style={{ borderBottom: '1px solid rgba(31,44,74,0.4)' }}>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{t.hora}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{t.contractType ?? '—'}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-dim)' }}>
+                        {typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-faint)' }}>{t.stake.toFixed(2)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? 'var(--green)' : 'var(--red-hi)' }}>
+                        {t.profit >= 0 ? '' : '-'}{Math.abs(t.profit).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )
         )}
       </div>
