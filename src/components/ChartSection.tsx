@@ -88,7 +88,6 @@ export function ChartSection() {
   const [phase,   setPhase]   = useState<'connecting'|'loading'|'live'|'error'>('connecting')
   const [quote,   setQuote]   = useState<number | null>(null)
   const [tkCnt,   setTkCnt]   = useState(0)
-  const [_strip,  _setStrip]  = useState<number[]>([])
   const [info,    setInfo]    = useState(() => calcAll([], 25))
   const [bars,    setBars]    = useState<number[]>(Array(10).fill(0))
   const [winOpen, setWinOpen] = useState(false)
@@ -232,7 +231,7 @@ export function ChartSection() {
     return COLOR_NEUTRAL
   }
 
-  const lastD    = strip.length > 0 ? strip[strip.length - 1] : null
+  const lastD    = hist.current.length > 0 ? hist.current[hist.current.length - 1] : null
   const maxBar   = Math.max(...bars, 10)
   const symLabel = SYMBOLS.find(s => s.value === symbol)?.label ?? symbol
 
