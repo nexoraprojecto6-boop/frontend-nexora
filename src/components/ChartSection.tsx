@@ -14,7 +14,6 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 // ── Config ───────────────────────────────────────────────────
 const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
 const HISTORY_LOAD = 1000
-const STRIP_SIZE   = 30
 const SMOOTH       = 0.09
 const PING_MS      = 25_000
 const RECONNECT_MS = 2_500
@@ -89,7 +88,7 @@ export function ChartSection() {
   const [phase,   setPhase]   = useState<'connecting'|'loading'|'live'|'error'>('connecting')
   const [quote,   setQuote]   = useState<number | null>(null)
   const [tkCnt,   setTkCnt]   = useState(0)
-  const [strip,   setStrip]   = useState<number[]>([])
+  const [_strip,  _setStrip]  = useState<number[]>([])
   const [info,    setInfo]    = useState(() => calcAll([], 25))
   const [bars,    setBars]    = useState<number[]>(Array(10).fill(0))
   const [winOpen, setWinOpen] = useState(false)
@@ -144,7 +143,7 @@ export function ChartSection() {
     setInfo(all)
     setQuote(price)
     setTkCnt(hist.current.length)
-    setStrip(prev => { const n = [...prev, d]; return n.length > STRIP_SIZE ? n.slice(-STRIP_SIZE) : n })
+
     setPhase('live')
   }, [applyPcts])
 
@@ -177,7 +176,7 @@ export function ChartSection() {
         applyPcts(pcts, true)   // snap — sem animar do zero
         setInfo(all)
         setTkCnt(hist.current.length)
-        setStrip(hist.current.slice(-STRIP_SIZE))
+
         setPhase('live')
         return
       }
@@ -199,7 +198,6 @@ export function ChartSection() {
     target.current  = Array(10).fill(0)
     current.current = Array(10).fill(0)
     setBars(Array(10).fill(0))
-    setStrip([])
     setTkCnt(0)
     setQuote(null)
     setInfo(calcAll([], win))
@@ -342,57 +340,6 @@ export function ChartSection() {
         })}
       </div>
 
-      {/* ── Rodapé: símbolo + tira de dígitos ─────────────── */}
-      <div style={{ borderTop: '1px solid var(--border)', padding: '8px 14px 10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Selector de símbolo */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <button onClick={() => setWinOpen(false)} style={{ background: 'none', padding: 0, cursor: 'default' }}>
-              <select value={symbol} onChange={e => setSymbol(e.target.value)} style={{
-                background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
-                borderRadius: 7, padding: '4px 8px', fontSize: 11, fontWeight: 600,
-                color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-              }}>
-                {SYMBOLS.map(s => (
-                  <option key={s.value} value={s.value} style={{ background: 'var(--bg-card)' }}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </button>
-          </div>
-
-          {/* Tira de últimos dígitos */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flex: 1 }}>
-            {strip.length === 0 ? (
-              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>
-                {phase === 'connecting' ? 'A ligar...'
-                 : phase === 'loading' ? 'A carregar...'
-                 : phase === 'error'   ? 'Erro...'
-                 : 'Aguardando...'}
-              </span>
-            ) : strip.map((d, i) => {
-              const isNew  = i === strip.length - 1
-              const isHot  = d === info.hotDigit  && info.total >= 10
-              const isCold = d === info.coldDigit && info.total >= 10
-              return (
-                <span key={i} className="tabular" style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, fontFamily: 'var(--font-mono)',
-                  width: isNew ? 26 : 21, height: isNew ? 26 : 21,
-                  fontSize: isNew ? 13 : 11, fontWeight: 700, borderRadius: 5,
-                  background: isNew ? 'rgba(46,125,50,0.2)' : 'var(--bg-card-hi)',
-                  color: isNew ? COLOR_HOT : isHot ? COLOR_HOT : isCold ? COLOR_COLD : 'var(--text-dim)',
-                  border: `1px solid ${isNew ? 'rgba(46,125,50,0.5)' : 'var(--border)'}`,
-                  opacity: 0.35 + (i / strip.length) * 0.65,
-                }}>
-                  {d}
-                </span>
-              )
-            })}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
