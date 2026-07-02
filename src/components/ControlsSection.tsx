@@ -214,6 +214,8 @@ export function ControlsSection() {
     return () => clearInterval(id)
   }, [isRunning, progressStep])
 
+  // netPnL / totalWins / totalLosses continuam calculados (usados noutros
+  // componentes, ex. BalanceCard) — apenas deixámos de os RENDERIZAR aqui.
   const { netPnL, totalWins, totalLosses } = useMemo(() => {
     const active = sessionBots.filter(b => b.stats.totalTrades > 0 || b.status === 'running')
     return {
@@ -222,6 +224,7 @@ export function ControlsSection() {
       totalLosses: active.reduce((s, b) => s + b.stats.losses, 0),
     }
   }, [sessionBots])
+  void netPnL; void totalWins; void totalLosses
 
   const handleToggle = () => {
     if (!selectedBot) return
@@ -258,6 +261,7 @@ export function ControlsSection() {
         {statusMessage && (
           <div style={{
             padding: '8px 12px', borderRadius: 8, fontSize: 12, border: '1px solid',
+            fontFamily: 'var(--font-body)', fontWeight: 600, letterSpacing: 0.1,
             background: statusMessage.kind === 'success' ? 'rgba(24,201,122,0.1)' : statusMessage.kind === 'warning' ? 'rgba(245,166,35,0.1)' : 'rgba(233,32,63,0.1)',
             borderColor: statusMessage.kind === 'success' ? 'rgba(24,201,122,0.25)' : statusMessage.kind === 'warning' ? 'rgba(245,166,35,0.25)' : 'rgba(233,32,63,0.25)',
             color: statusMessage.kind === 'success' ? 'var(--green)' : statusMessage.kind === 'warning' ? '#f5a623' : 'var(--red-hi)',
@@ -266,7 +270,7 @@ export function ControlsSection() {
           </div>
         )}
 
-        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           <div style={{ position: 'relative' }}>
             <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
             <button onClick={() => setShowAccDrop(!showAccDrop)} className="btn-ghost" style={{
@@ -294,16 +298,13 @@ export function ControlsSection() {
           <div style={{ position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500 }}>Estratégia</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className={`dot ${wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'warn' : 'off'}`} />
-                <button onClick={listCatalogBots} title="Recarregar" style={{ color: 'var(--text-faint)' }}>
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    style={isLoadingCatalog ? { animation: 'spin 1s linear infinite' } : undefined}>
-                    <path d="M1 4v5h5" /><path d="M15 12V7h-5" />
-                    <path d="M13.51 5.87a6 6 0 0 0-10.16 2.14" /><path d="M2.49 10.13a6 6 0 0 0 10.16-2.14" />
-                  </svg>
-                </button>
-              </div>
+              <button onClick={listCatalogBots} title="Recarregar" style={{ color: 'var(--text-faint)' }}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={isLoadingCatalog ? { animation: 'spin 1s linear infinite' } : undefined}>
+                  <path d="M1 4v5h5" /><path d="M15 12V7h-5" />
+                  <path d="M13.51 5.87a6 6 0 0 0-10.16 2.14" /><path d="M2.49 10.13a6 6 0 0 0 10.16-2.14" />
+                </svg>
+              </button>
             </div>
             <button onClick={() => setShowBotDrop(!showBotDrop)} className="btn-ghost" style={{
               width: '100%', padding: '12px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
@@ -326,13 +327,6 @@ export function ControlsSection() {
                 ))}
               </div>
             )}
-          </div>
-
-          <div>
-            <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Risco</p>
-            <button className="btn-ghost" style={{ width: '100%', padding: '12px', fontSize: 12, color: 'var(--text)' }}>
-              {pendingConfig ? 'Personalizado' : 'Padrão'}
-            </button>
           </div>
         </div>
 
@@ -388,31 +382,6 @@ export function ControlsSection() {
             </div>
           </div>
         </div>
-
-        {sessionBots.some(b => b.stats.totalTrades > 0 || b.status === 'running') && (
-          <div className="stats-strip" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 12px', borderRadius: 12, background: 'var(--bg-card-hi)', border: '1px solid var(--border)' }}>
-            <div>
-              <p style={{ color: 'var(--text-faint)', fontSize: 10 }}>Lucro/Prejuízo</p>
-              <p className="tabular" style={{ fontSize: 15, fontWeight: 700, color: netPnL >= 0 ? 'var(--green)' : 'var(--red-hi)' }}>
-                {netPnL < 0 ? '-' : ''}${Math.abs(netPnL).toFixed(2)}
-              </p>
-            </div>
-            <div style={{ height: 32, width: 1, background: 'var(--border)' }} />
-            <div>
-              <p style={{ color: 'var(--text-faint)', fontSize: 10 }}>Operações</p>
-              <p className="tabular" style={{ fontSize: 13 }}>
-                <span style={{ color: 'var(--green)', fontWeight: 700 }}>{totalWins}</span>
-                <span style={{ color: 'var(--text-faint)', margin: '0 2px' }}>/</span>
-                <span style={{ color: 'var(--red-hi)', fontWeight: 700 }}>{totalLosses}</span>
-              </p>
-            </div>
-            <div style={{ height: 32, width: 1, background: 'var(--border)' }} />
-            <div>
-              <p style={{ color: 'var(--text-faint)', fontSize: 10 }}>Trades</p>
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--white)' }}>{trades.length}</p>
-            </div>
-          </div>
-        )}
       </div>
 
       {showConfig && selectedBot && (
