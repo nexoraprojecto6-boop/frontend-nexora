@@ -17,6 +17,67 @@ function Portal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body)
 }
 
+// ── Input numérico controlado por texto local ──────────────────
+// Problema que isto resolve: um <input type="number" value={n}> com
+// onChange={e => onChange(parseFloat(e.target.value) || 0)} nunca
+// fica vazio de verdade — apagar o conteúdo gera parseFloat('') =
+// NaN, que o "|| 0" transforma logo em 0, e o campo "salta" de volta
+// para 0 antes da pessoa conseguir digitar o próximo número.
+//
+// Aqui mantemos um estado de TEXTO local (raw) que pode ficar vazio
+// enquanto a pessoa edita. Só propomos um número válido para o
+// componente pai quando o texto for de facto um número parseável;
+// se o campo ficar vazio, avisamos o pai com `undefined` (em vez de
+// forçar 0), e o valor numérico só é "resolvido" de facto no
+// momento de confirmar o formulário (ver sanitizeNumericValues).
+function NumberField({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; onChange: (v: unknown) => void }) {
+  const toText = (v: unknown) => (v === undefined || v === null || Number.isNaN(v as number) ? '' : String(v))
+  const [raw, setRaw] = useState<string>(toText(value))
+
+  // Se o valor vindo de fora mudar por outra via (ex: troca de bot
+  // selecionado), sincroniza o texto local — mas nunca enquanto o
+  // campo está vazio por ação do próprio usuário (evita "reencher"
+  // um campo que a pessoa acabou de limpar de propósito).
+  const userClearedRef = useRef(false)
+  useEffect(() => {
+    if (userClearedRef.current) return
+    setRaw(toText(value))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  return (
+    <input
+      type="number"
+      value={raw}
+      min={f.min}
+      max={f.max}
+      step={f.step ?? 1}
+      onChange={(e) => {
+        const v = e.target.value
+        setRaw(v)
+
+        if (v === '' || v === '-') {
+          userClearedRef.current = true
+          onChange(undefined) // campo limpo — não força 0
+          return
+        }
+
+        userClearedRef.current = false
+        const parsed = parseFloat(v)
+        if (!Number.isNaN(parsed)) onChange(parsed)
+      }}
+      onBlur={() => {
+        // Ao sair do campo vazio, não inventamos um valor — deixamos
+        // vazio mesmo. A conversão final para um número válido só
+        // acontece ao confirmar (sanitizeNumericValues), usando
+        // f.defaultValue ou 0 como fallback.
+      }}
+      className="btn-ghost"
+      style={{ width: '100%', padding: '10px 12px', fontSize: 14 }}
+    />
+  )
+}
+
 function Field({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; onChange: (v: unknown) => void }) {
   if (f.type === 'toggle') {
     return (
@@ -40,11 +101,27 @@ function Field({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; on
       </select>
     )
   }
-  return (
-    <input type="number" value={value as number} min={f.min} max={f.max} step={f.step ?? 1}
-      onChange={e => onChange(parseFloat(e.target.value) || 0)} className="btn-ghost"
-      style={{ width: '100%', padding: '10px 12px', fontSize: 14 }} />
-  )
+  return <NumberField f={f} value={value} onChange={onChange} />
+}
+
+// ── Sanitiza valores numéricos antes de enviar ao backend ───────
+// Campos que ficaram vazios (undefined) na hora de confirmar caem
+// para f.defaultValue, ou 0 se não houver default. Só é chamado no
+// momento do Confirmar — durante a digitação o campo pode ficar
+// vazio sem qualquer conversão forçada.
+function sanitizeNumericValues(
+  vals: Record<string, unknown>,
+  fields: StrategyFieldDef[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...vals }
+  fields.forEach((f) => {
+    if (f.type === 'toggle' || f.type === 'select') return
+    const v = out[f.key]
+    if (v === undefined || v === null || (typeof v === 'number' && Number.isNaN(v))) {
+      out[f.key] = f.defaultValue !== undefined ? f.defaultValue : 0
+    }
+  })
+  return out
 }
 
 function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: () => void; onConfirm: (c: Partial<BotConfig>) => void }) {
@@ -78,17 +155,20 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
   const strategyFields = STRATEGY_PARAMS_FIELDS[bot.strategy] ?? []
 
   const handleConfirm = () => {
+    const cfg = sanitizeNumericValues(cfgVals, commonFields)
+    const prm = sanitizeNumericValues(prmVals, strategyFields)
+
     onConfirm({
-      symbol: cfgVals.symbol as string,
-      contractType: cfgVals.contractType as string,
-      duration: cfgVals.duration as number,
-      durationUnit: cfgVals.durationUnit as BotConfig['durationUnit'],
-      initialStake: cfgVals.initialStake as number,
+      symbol: cfg.symbol as string,
+      contractType: cfg.contractType as string,
+      duration: cfg.duration as number,
+      durationUnit: cfg.durationUnit as BotConfig['durationUnit'],
+      initialStake: cfg.initialStake as number,
       currency: 'USD',
-      maxTrades: cfgVals.maxTrades as number,
-      maxLoss: cfgVals.maxLoss as number,
-      maxProfit: cfgVals.maxProfit as number,
-      strategyParams: prmVals,
+      maxTrades: cfg.maxTrades as number,
+      maxLoss: cfg.maxLoss as number,
+      maxProfit: cfg.maxProfit as number,
+      strategyParams: prm,
     })
     onClose()
   }
