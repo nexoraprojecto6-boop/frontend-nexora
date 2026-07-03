@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react'
-import { api } from '../lib/api'
+import { api, LocalUser } from '../lib/api'
 import type { Account } from '../lib/types'
 
 interface AuthContextType {
+  // Sessão Deriv (OAuth) — inalterado, controla acesso ao dashboard/trading
   isAuthenticated: boolean
   isLoading: boolean
   accounts: Account[]
@@ -11,6 +12,14 @@ interface AuthContextType {
   logout: () => Promise<void>
   refreshAccounts: () => Promise<void>
   login: (token: string) => Promise<boolean>
+
+  // Sessão local (nome, whatsapp, email + senha) — controla acesso
+  // ao ecrã "Conectar à Deriv"
+  isLocalAuthenticated: boolean
+  isLocalLoading: boolean
+  localUser: LocalUser | null
+  loginLocal: (token: string, user: LocalUser) => void
+  logoutLocal: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -21,6 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [currentAccount, setCurrentAccountState] = useState<Account | null>(null)
   const initialCheckDone = useRef(false)
+
+  const [isLocalAuthenticated, setIsLocalAuthenticated] = useState(false)
+  const [isLocalLoading, setIsLocalLoading] = useState(true)
+  const [localUser, setLocalUser] = useState<LocalUser | null>(null)
 
   const loadAccounts = useCallback(async (): Promise<boolean> => {
     try {
@@ -52,6 +65,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkAuth = useCallback(async () => {
     if (initialCheckDone.current) return
     initialCheckDone.current = true
+
+    // Sessão local
+    const localToken = localStorage.getItem('localToken')
+    const storedUser = localStorage.getItem('localUser')
+    if (localToken) {
+      setIsLocalAuthenticated(true)
+      if (storedUser) {
+        try { setLocalUser(JSON.parse(storedUser)) } catch { /* ignora */ }
+      }
+    }
+    setIsLocalLoading(false)
+
+    // Sessão Deriv
     const token = localStorage.getItem('token')
     if (!token) {
       setIsLoading(false)
@@ -74,6 +100,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return ok
   }, [loadAccounts])
 
+  const loginLocal = useCallback((token: string, user: LocalUser) => {
+    localStorage.setItem('localToken', token)
+    localStorage.setItem('localUser', JSON.stringify(user))
+    setLocalUser(user)
+    setIsLocalAuthenticated(true)
+  }, [])
+
+  const logoutLocal = useCallback(() => {
+    localStorage.removeItem('localToken')
+    localStorage.removeItem('localUser')
+    setLocalUser(null)
+    setIsLocalAuthenticated(false)
+  }, [])
+
   const setCurrentAccount = async (account: Account) => {
     setCurrentAccountState(account)
     localStorage.setItem('currentAccountId', account.account_id)
@@ -89,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false)
     setAccounts([])
     setCurrentAccountState(null)
+    logoutLocal()
     window.location.href = '/'
   }
 
@@ -109,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       isAuthenticated, isLoading, accounts, currentAccount,
       setCurrentAccount, logout, refreshAccounts, login,
+      isLocalAuthenticated, isLocalLoading, localUser, loginLocal, logoutLocal,
     }}>
       {children}
     </AuthContext.Provider>
