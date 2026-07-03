@@ -262,7 +262,8 @@ a {
 }
 .glass-banner-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 
-/* ── Overlay + sheet de vidro (selecção de conta / estratégia) ── */
+/* ── Overlay + sheet de vidro (selecção de conta / estratégia)
+   Sempre centralizado na tela — desktop e mobile ── */
 .glass-overlay {
   position: fixed;
   inset: 0;
@@ -271,12 +272,10 @@ a {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  padding: 20px;
   animation: glass-fade 0.25s ease;
-}
-@media (min-width: 640px) {
-  .glass-overlay { align-items: center; }
 }
 @keyframes glass-fade { from { opacity: 0; } to { opacity: 1; } }
 
@@ -284,24 +283,20 @@ a {
   width: 100%;
   max-width: 420px;
   max-height: 72vh;
-  border-radius: 22px 22px 0 0;
+  border-radius: 22px;
   background: linear-gradient(160deg, rgba(24,36,64,0.65), rgba(13,20,36,0.55));
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255,255,255,0.10);
-  border-bottom: none;
-  box-shadow: 0 -12px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.14);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.14);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: glass-sheet-up 0.3s cubic-bezier(.22,1,.36,1);
+  animation: glass-sheet-pop 0.25s cubic-bezier(.22,1,.36,1);
 }
-@media (min-width: 640px) {
-  .glass-sheet { border-radius: 22px; border-bottom: 1px solid rgba(255,255,255,0.10); }
-}
-@keyframes glass-sheet-up {
-  from { transform: translateY(24px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
+@keyframes glass-sheet-pop {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .glass-sheet-header {
