@@ -1,38 +1,334 @@
-// ============================================================
-// NEXORA FOREX — App Root
-//
-// Providers globais (Auth, Trading, Loader) ficam aqui.
-// BotsProvider NÃO está aqui — está apenas dentro do
-// DashboardPage. Isso evita que o WebSocket abra antes do
-// login, desperdiçando sessões no backend e causando loops de
-// reconexão em rotas que não precisam de dados de trading.
-// ============================================================
+/* ============================================================
+   NEXORA FOREX — Design Tokens
+   Tema "casa de apostas": fundo quase-preto, azul eléctrico
+   como cor primária de acção, vermelho reservado para risco/
+   stop/perda, branco para texto e contraste máximo.
+   ============================================================ */
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
-import { TradingProvider } from './context/TradingContext'
-import { LoaderProvider } from './context/LoaderContext'
-import LoginPage from './pages/LoginPage'
-import CallbackPage from './pages/CallbackPage'
-import DashboardPage from './pages/DashboardPage'
-import MenuPage from './pages/MenuPage'
+:root {
+  /* Base */
+  --bg:            #070b14;
+  --bg-elevated:   #0d1424;
+  --bg-card:       #10192e;
+  --bg-card-hi:    #16213d;
+  --border:        #1f2c4a;
+  --border-hi:     #2c3d63;
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <LoaderProvider>
-          <TradingProvider>
-            <Routes>
-              <Route path="/" element={<LoginPage />} />
-              <Route path="/callback" element={<CallbackPage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/menu" element={<MenuPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </TradingProvider>
-        </LoaderProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  )
+  /* Azul — acção primária, links, foco */
+  --blue:          #1857ff;
+  --blue-hi:       #3f74ff;
+  --blue-dim:      #0d2e8c;
+  --blue-glow:     rgba(24, 87, 255, 0.35);
+
+  /* Vermelho — risco, perda, parar, sair */
+  --red:           #e9203f;
+  --red-hi:        #ff3a57;
+  --red-dim:       #7a0f20;
+  --red-glow:      rgba(233, 32, 63, 0.35);
+
+  /* Verde — usado só para sinalizar lucro/ganho (mínimo, não é cor de marca) */
+  --green:         #18c97a;
+
+  /* Texto */
+  --white:         #ffffff;
+  --text:          #eef1f8;
+  --text-dim:      #8993ad;
+  --text-faint:    #515d7d;
+
+  /* Tipografia */
+  --font-display:  'Rajdhani', system-ui, sans-serif;
+  --font-body:     'Inter', system-ui, sans-serif;
+  --font-mono:     'JetBrains Mono', monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* Fundo com leve textura radial — dá profundidade sem ruído */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 15% -10%, rgba(24, 87, 255, 0.16) 0%, transparent 45%),
+    radial-gradient(circle at 100% 10%, rgba(233, 32, 63, 0.10) 0%, transparent 40%);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+input, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 4px; }
+* { scrollbar-width: thin; scrollbar-color: var(--border-hi) transparent; }
+
+:focus-visible {
+  outline: 2px solid var(--blue-hi);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Botão primário reutilizável (estilo "apostar") ── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--blue), var(--blue-hi));
+  color: var(--white);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px var(--blue-glow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 26px var(--blue-glow); }
+.btn-primary:active:not(:disabled) { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.5; box-shadow: none; }
+
+.btn-danger {
+  background: linear-gradient(135deg, var(--red), var(--red-hi));
+  color: var(--white);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px var(--red-glow);
+}
+
+.btn-ghost {
+  background: var(--bg-card-hi);
+  border: 1px solid var(--border-hi);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn-ghost:hover { background: var(--border); border-color: var(--blue-hi); }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.logo-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  background: linear-gradient(120deg, var(--white) 0%, var(--blue-hi) 55%, var(--red-hi) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fade-in 0.3s ease forwards; }
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot.live { background: var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
+.dot.off  { background: var(--red); }
+.dot.warn { background: #f5a623; }
+
+/* ============================================================
+   MOBILE RESPONSIVE — ajustes de tamanho/organização
+   (nenhuma lógica de negócio foi alterada, apenas CSS)
+   ============================================================ */
+
+/* Gráfico: altura ajustável por breakpoint, dá prioridade ao
+   espaço da tela para os demais componentes caberem sem cortar */
+.chart-bars-wrap {
+  --chart-h: 220px;
+  --chart-bar-max: 170px;
+  height: var(--chart-h);
+}
+@media (max-width: 1023px) {
+  .chart-bars-wrap { --chart-h: 170px; --chart-bar-max: 125px; }
+}
+@media (max-width: 480px) {
+  .chart-bars-wrap { --chart-h: 145px; --chart-bar-max: 100px; }
+}
+
+/* Segurança extra contra scroll horizontal em telas pequenas */
+@media (max-width: 1023px) {
+  .card { max-width: 100%; }
+}
+
+/* Grid de controles (Tipo de Conta / Estratégia) e a
+   faixa de estatísticas ficam mais compactas em telas estreitas */
+@media (max-width: 480px) {
+  .controls-grid { gap: 8px; }
+  .stats-strip { gap: 10px; padding: 8px 10px; flex-wrap: wrap; }
+}
+
+/* ============================================================
+   GLASS UI — banner de notificações + sheets de selecção
+   ============================================================ */
+
+/* ── Banner de notificações (topo, flutuante) ── */
+.glass-banner {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  width: min(92vw, 420px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(22,33,61,0.55), rgba(16,25,46,0.35));
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.08);
+  animation: glass-drop 0.35s cubic-bezier(.22,1,.36,1);
+}
+@keyframes glass-drop {
+  from { opacity: 0; transform: translate(-50%, -14px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.glass-banner-close {
+  color: var(--text-faint);
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.glass-banner-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+
+/* ── Overlay + sheet de vidro (selecção de conta / estratégia) ── */
+.glass-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: rgba(5,8,16,0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: glass-fade 0.25s ease;
+}
+@media (min-width: 640px) {
+  .glass-overlay { align-items: center; }
+}
+@keyframes glass-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.glass-sheet {
+  width: 100%;
+  max-width: 420px;
+  max-height: 72vh;
+  border-radius: 22px 22px 0 0;
+  background: linear-gradient(160deg, rgba(24,36,64,0.65), rgba(13,20,36,0.55));
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-bottom: none;
+  box-shadow: 0 -12px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.14);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: glass-sheet-up 0.3s cubic-bezier(.22,1,.36,1);
+}
+@media (min-width: 640px) {
+  .glass-sheet { border-radius: 22px; border-bottom: 1px solid rgba(255,255,255,0.10); }
+}
+@keyframes glass-sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.glass-sheet-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.glass-sheet-body {
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.glass-option {
+  width: 100%;
+  text-align: left;
+  padding: 14px 14px;
+  border-radius: 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.glass-option:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+.glass-option.active { background: rgba(63,116,255,0.14); border-color: rgba(63,116,255,0.35); }
+
+.glass-sheet-loader {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 40px 20px;
 }
