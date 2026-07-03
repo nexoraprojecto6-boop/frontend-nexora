@@ -5,14 +5,17 @@
 // BotsProvider NÃO está aqui — está apenas dentro do
 // DashboardPage. Isso evita que o WebSocket abra antes do
 // login, desperdiçando sessões no backend e causando loops de
-// reconexão em rotas que não precisam de dados de trading.5
+// reconexão em rotas que não precisam de dados de trading.
 // ============================================================
-
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { TradingProvider } from './context/TradingContext'
 import { LoaderProvider } from './context/LoaderContext'
 import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import VerifyPendingPage from './pages/VerifyPendingPage'
+import VerifyEmailResultPage from './pages/VerifyEmailResultPage'
+import ConnectDerivPage from './pages/ConnectDerivPage'
 import CallbackPage from './pages/CallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import MenuPage from './pages/MenuPage'
@@ -25,6 +28,11 @@ export default function App() {
           <TradingProvider>
             <Routes>
               <Route path="/" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-pending" element={<VerifyPendingPage />} />
+              <Route path="/verify-email" element={<VerifyEmailResultPage />} />
+              <Route path="/connect-deriv" element={<ConnectDerivPage />} />
+
               <Route path="/callback" element={<CallbackPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/menu" element={<MenuPage />} />
