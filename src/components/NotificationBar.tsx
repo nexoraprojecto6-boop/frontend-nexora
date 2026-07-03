@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useTrading } from '../context/TradingContext'
 import { useBots } from '../context/BotsContext'
 
 type BannerKind = 'error' | 'insufficient' | 'success' | 'stoploss'
@@ -11,15 +10,18 @@ interface BannerMsg {
 }
 
 export function NotificationBar() {
-  const { balance, loading: balanceLoading } = useTrading()
   const { lastError, statusMessage } = useBots()
 
-  // ── Prioridade: erro > saldo insuficiente > meta > stop loss ──
+  // ── Prioridade: erro geral > saldo insuficiente > meta > stop loss ──
+  // lastError    → erro genérico do bot (bot:error)          → mensagem fixa de reload
+  // statusMessage.kind === 'error'   → bot:insufficient_balance → saldo insuficiente
+  // statusMessage.kind === 'success' → bot:goal_reached (lucro)  → meta atingida
+  // statusMessage.kind === 'warning' → bot:goal_reached (perda)  → stop loss atingido
   const active: BannerMsg | null = useMemo(() => {
-    if (lastError || statusMessage?.kind === 'error') {
+    if (lastError) {
       return { kind: 'error', icon: '⚠', text: 'Erro! Tente carregar a página.' }
     }
-    if (!balanceLoading && balance <= 0) {
+    if (statusMessage?.kind === 'error') {
       return { kind: 'insufficient', icon: '💳', text: 'Saldo insuficiente. Faça um depósito na Deriv.' }
     }
     if (statusMessage?.kind === 'success') {
@@ -29,7 +31,7 @@ export function NotificationBar() {
       return { kind: 'stoploss', icon: '🛑', text: 'Stop loss atingido!' }
     }
     return null
-  }, [lastError, statusMessage, balance, balanceLoading])
+  }, [lastError, statusMessage])
 
   const [visible, setVisible] = useState(false)
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
@@ -43,8 +45,8 @@ export function NotificationBar() {
     setVisible(true)
 
     if (hideTimer.current) clearTimeout(hideTimer.current)
-    // erro e saldo insuficiente ficam visíveis até serem resolvidos
-    // sucesso e stop loss desaparecem sozinhos depois de um tempo
+    // sucesso e stop loss desaparecem sozinhos; erro e saldo insuficiente
+    // ficam visíveis até o contexto limpar a mensagem (BotsContext já tem timeout próprio)
     if (active?.kind === 'success' || active?.kind === 'stoploss') {
       hideTimer.current = setTimeout(() => setVisible(false), 5000)
     }
@@ -55,7 +57,7 @@ export function NotificationBar() {
   if (!active || !visible) return null
 
   const palette: Record<BannerKind, { border: string; glow: string; color: string }> = {
-    error:        { border: 'rgba(233,32,63,0.45)', glow: 'rgba(233,32,63,0.25)', color: 'var(--red-hi)' },
+    error:        { border: 'rgba(233,32,63,0.45)',  glow: 'rgba(233,32,63,0.25)', color: 'var(--red-hi)' },
     insufficient: { border: 'rgba(245,166,35,0.45)', glow: 'rgba(245,166,35,0.2)', color: '#f5a623' },
     success:      { border: 'rgba(24,201,122,0.45)', glow: 'rgba(24,201,122,0.25)', color: 'var(--green)' },
     stoploss:     { border: 'rgba(233,32,63,0.45)',  glow: 'rgba(233,32,63,0.25)', color: 'var(--red-hi)' },
