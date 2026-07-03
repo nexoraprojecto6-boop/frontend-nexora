@@ -158,6 +158,25 @@ export const api = {
     return data
   },
 
+  // Chama o backend para consumir o token de verificação (usa a rota
+  // POST /api/auth/verify-email, que já existe no auth.routes.ts).
+  // O link no email aponta para o FRONTEND (não para esta rota
+  // diretamente) para evitar que scanners de segurança de email
+  // "cliquem" no link automaticamente e gastem o token antes do
+  // utilizador real abrir a página.
+  async verifyEmail(token: string): Promise<{ success: boolean; token: string; user: LocalUser }> {
+    const res = await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
+    }
+    return data
+  },
+
   async getLocalMe(): Promise<{ success: boolean; user: LocalUser }> {
     return fetchWithLocalAuth('/api/auth/me')
   },
