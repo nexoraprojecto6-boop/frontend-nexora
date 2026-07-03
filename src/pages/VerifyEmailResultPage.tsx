@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
@@ -9,50 +9,86 @@ export default function VerifyEmailResultPage() {
   const [params] = useSearchParams()
   const { loginLocal } = useAuth()
 
-  const status = params.get('status')
-  const token = params.get('token')
-  const message = params.get('message')
+  // O link do email chega como /verify-email?token=<token cru>.
+  // É esta página (frontend) que consome o token chamando o backend,
+  // em vez do backend fazer isso sozinho num simples GET — assim
+  // scanners de segurança de email (que "clicam" nos links do email
+  // automaticamente) não gastam o token antes do utilizador real abrir.
+  const rawToken = params.get('token')
 
+  const [state, setState] = useState<'loading' | 'success' | 'error'>(
+    rawToken ? 'loading' : 'error',
+  )
+  const [errorMessage, setErrorMessage] = useState<string>('')
   const [countdown, setCountdown] = useState(2)
 
+  // Evita chamar a verificação duas vezes (React StrictMode em dev
+  // corre efeitos 2x; isto garante que só a primeira chamada conta).
+  const calledRef = useRef(false)
+
   useEffect(() => {
-    if (status === 'success' && token) {
-      api.getLocalMe()
-        .then(({ user }) => {
-          loginLocal(token, user)
-        })
-        .catch(() => {
-          // Mesmo sem conseguir buscar o utilizador, guardamos o token —
-          // o ecrã seguinte trata de validar o acesso.
-          loginLocal(token, { id: '', fullName: '', whatsapp: '', email: '', role: 'user' })
-        })
-
-      const interval = setInterval(() => {
-        setCountdown((c) => {
-          if (c <= 1) {
-            clearInterval(interval)
-            navigate('/connect-deriv')
-            return 0
-          }
-          return c - 1
-        })
-      }, 1000)
-      return () => clearInterval(interval)
+    if (!rawToken) {
+      setState('error')
+      setErrorMessage('Link de verificação inválido — falta o token.')
+      return
     }
-  }, [status, token])
+    if (calledRef.current) return
+    calledRef.current = true
 
-  const isSuccess = status === 'success'
+    api.verifyEmail(rawToken)
+      .then(({ token, user }) => {
+        loginLocal(token, user)
+        setState('success')
+      })
+      .catch((err: Error) => {
+        setState('error')
+        setErrorMessage(err.message || 'O link pode ter expirado ou já foi usado.')
+      })
+  }, [rawToken])
+
+  useEffect(() => {
+    if (state !== 'success') return
+    const interval = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(interval)
+          navigate('/connect-deriv')
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [state])
 
   return (
     <div style={{ position: 'relative', minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflow: 'hidden' }}>
       <div style={{
         position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)', width: 600, height: 600, borderRadius: '50%',
-        background: `radial-gradient(circle, ${isSuccess ? 'rgba(24,87,255,0.15)' : 'rgba(233,32,63,0.15)'} 0%, transparent 70%)`,
+        background: `radial-gradient(circle, ${state === 'success' ? 'rgba(24,87,255,0.15)' : 'rgba(233,32,63,0.15)'} 0%, transparent 70%)`,
         pointerEvents: 'none',
       }} />
 
       <div className="card fade-in" style={{ ...glassCard, textAlign: 'center' }}>
-        {isSuccess ? (
+        {state === 'loading' && (
+          <>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%', margin: '0 auto 20px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(24,87,255,0.12)', border: '1px solid rgba(24,87,255,0.3)', fontSize: 22,
+            }}>
+              ⏳
+            </div>
+            <h1 style={{ fontSize: 21, marginBottom: 10, color: 'var(--text-dim, #e6eaf5)' }}>
+              A verificar o teu email...
+            </h1>
+            <p style={{ color: 'var(--text-faint)', fontSize: 13.5 }}>
+              Aguarda só um momento.
+            </p>
+          </>
+        )}
+
+        {state === 'success' && (
           <>
             <div style={{
               width: 56, height: 56, borderRadius: '50%', margin: '0 auto 20px',
@@ -71,7 +107,9 @@ export default function VerifyEmailResultPage() {
               A avançar em {countdown}s...
             </p>
           </>
-        ) : (
+        )}
+
+        {state === 'error' && (
           <>
             <div style={{
               width: 56, height: 56, borderRadius: '50%', margin: '0 auto 20px',
@@ -84,7 +122,7 @@ export default function VerifyEmailResultPage() {
               Não foi possível verificar
             </h1>
             <p style={{ color: 'var(--text-faint)', fontSize: 13.5, marginBottom: 24, lineHeight: 1.6 }}>
-              {message || 'O link pode ter expirado ou já foi usado. Pede um novo email de verificação ou fala com o suporte.'}
+              {errorMessage || 'O link pode ter expirado ou já foi usado. Pede um novo email de verificação ou fala com o suporte.'}
             </p>
 
             <a
