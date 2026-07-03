@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { useBots } from '../context/BotsContext'
 import {
@@ -7,6 +8,14 @@ import {
 import type { BotConfig, CatalogBot, StrategyFieldDef } from '../lib/types'
 import { useLoader } from '../context/LoaderContext'
 import { api } from '../lib/api'
+
+// ── Portal: monta o conteúdo direto no <body>, fora de qualquer
+//    container com overflow/scroll, para evitar o bug de mobile
+//    onde position:fixed aninhado em overflow:auto não centraliza
+//    corretamente (comum em iOS Safari / alguns WebViews Android) ──
+function Portal({ children }: { children: React.ReactNode }) {
+  return createPortal(children, document.body)
+}
 
 function Field({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; onChange: (v: unknown) => void }) {
   if (f.type === 'toggle') {
@@ -85,9 +94,9 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
   }
 
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 40 }} />
-      <div style={{ position: 'fixed', inset: '16px 16px auto', top: 16, zIndex: 50, maxWidth: 520, margin: '0 auto' }}>
+    <Portal>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 640 }} />
+      <div style={{ position: 'fixed', inset: '16px 16px auto', top: 16, zIndex: 650, maxWidth: 520, margin: '0 auto' }}>
         <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <div>
@@ -143,7 +152,7 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
           </div>
         </div>
       </div>
-    </>
+    </Portal>
   )
 }
 
@@ -370,72 +379,76 @@ export function ControlsSection() {
         </div>
       </div>
 
-      {/* ── Sheet em vidro: Selecionar Tipo de Conta ── */}
+      {/* ── Sheet em vidro: Selecionar Tipo de Conta (via Portal) ── */}
       {showAccSheet && (
-        <div className="glass-overlay" onClick={() => !switchingAcc && setShowAccSheet(false)}>
-          <div className="glass-sheet" onClick={e => e.stopPropagation()}>
-            <div className="glass-sheet-header">
-              <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Tipo de Conta</p>
-              {!switchingAcc && (
-                <button onClick={() => setShowAccSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+        <Portal>
+          <div className="glass-overlay" onClick={() => !switchingAcc && setShowAccSheet(false)}>
+            <div className="glass-sheet" onClick={e => e.stopPropagation()}>
+              <div className="glass-sheet-header">
+                <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Tipo de Conta</p>
+                {!switchingAcc && (
+                  <button onClick={() => setShowAccSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+                )}
+              </div>
+              {switchingAcc ? (
+                <div className="glass-sheet-loader">
+                  <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                  <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A ligar à conta…</span>
+                </div>
+              ) : (
+                <div className="glass-sheet-body">
+                  {accounts.map(a => (
+                    <button key={a.account_id}
+                      className={`glass-option ${currentAccount?.account_id === a.account_id ? 'active' : ''}`}
+                      onClick={() => handleAccSelectSheet(a)}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? 'var(--blue-hi)' : 'var(--green)' }}>
+                        {a.is_virtual ? `Conta ${accLabels.demoLabel}` : `Conta ${accLabels.realLabel}`}
+                      </p>
+                      <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Saldo: ${Number(a.balance ?? 0).toFixed(2)}</p>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-            {switchingAcc ? (
-              <div className="glass-sheet-loader">
-                <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A ligar à conta…</span>
-              </div>
-            ) : (
-              <div className="glass-sheet-body">
-                {accounts.map(a => (
-                  <button key={a.account_id}
-                    className={`glass-option ${currentAccount?.account_id === a.account_id ? 'active' : ''}`}
-                    onClick={() => handleAccSelectSheet(a)}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? 'var(--blue-hi)' : 'var(--green)' }}>
-                      {a.is_virtual ? `Conta ${accLabels.demoLabel}` : `Conta ${accLabels.realLabel}`}
-                    </p>
-                    <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Saldo: ${Number(a.balance ?? 0).toFixed(2)}</p>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-        </div>
+        </Portal>
       )}
 
-      {/* ── Sheet em vidro: Selecionar Estratégia ── */}
+      {/* ── Sheet em vidro: Selecionar Estratégia (via Portal) ── */}
       {showBotSheet && (
-        <div className="glass-overlay" onClick={() => !switchingBot && setShowBotSheet(false)}>
-          <div className="glass-sheet" onClick={e => e.stopPropagation()}>
-            <div className="glass-sheet-header">
-              <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Estratégia</p>
-              {!switchingBot && (
-                <button onClick={() => setShowBotSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+        <Portal>
+          <div className="glass-overlay" onClick={() => !switchingBot && setShowBotSheet(false)}>
+            <div className="glass-sheet" onClick={e => e.stopPropagation()}>
+              <div className="glass-sheet-header">
+                <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Estratégia</p>
+                {!switchingBot && (
+                  <button onClick={() => setShowBotSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+                )}
+              </div>
+              {switchingBot ? (
+                <div className="glass-sheet-loader">
+                  <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                  <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A carregar estratégia…</span>
+                </div>
+              ) : catalogBots.length === 0 ? (
+                <div className="glass-sheet-loader">
+                  <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Nenhuma estratégia disponível'}</span>
+                </div>
+              ) : (
+                <div className="glass-sheet-body">
+                  {catalogBots.map(b => (
+                    <button key={b.id}
+                      className={`glass-option ${selectedBot?.id === b.id ? 'active' : ''}`}
+                      onClick={() => handleBotSelectSheet(b)}>
+                      <p style={{ fontSize: 14, color: 'var(--white)', fontWeight: 700 }}>{b.name}</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{STRATEGY_LABELS[b.strategy]}</p>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-            {switchingBot ? (
-              <div className="glass-sheet-loader">
-                <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A carregar estratégia…</span>
-              </div>
-            ) : catalogBots.length === 0 ? (
-              <div className="glass-sheet-loader">
-                <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Nenhuma estratégia disponível'}</span>
-              </div>
-            ) : (
-              <div className="glass-sheet-body">
-                {catalogBots.map(b => (
-                  <button key={b.id}
-                    className={`glass-option ${selectedBot?.id === b.id ? 'active' : ''}`}
-                    onClick={() => handleBotSelectSheet(b)}>
-                    <p style={{ fontSize: 14, color: 'var(--white)', fontWeight: 700 }}>{b.name}</p>
-                    <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{STRATEGY_LABELS[b.strategy]}</p>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-        </div>
+        </Portal>
       )}
 
       {showConfig && selectedBot && (
