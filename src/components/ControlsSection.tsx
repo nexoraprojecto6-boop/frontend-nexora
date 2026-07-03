@@ -281,22 +281,7 @@ export function ControlsSection() {
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {lastError && (
-          <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(233,32,63,0.1)', border: '1px solid rgba(233,32,63,0.25)', color: 'var(--red-hi)', fontSize: 12 }}>
-            ⚠ {lastError}
-          </div>
-        )}
-        {statusMessage && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8, fontSize: 12, border: '1px solid',
-            fontFamily: 'var(--font-body)', fontWeight: 600, letterSpacing: 0.1,
-            background: statusMessage.kind === 'success' ? 'rgba(24,201,122,0.1)' : statusMessage.kind === 'warning' ? 'rgba(245,166,35,0.1)' : 'rgba(233,32,63,0.1)',
-            borderColor: statusMessage.kind === 'success' ? 'rgba(24,201,122,0.25)' : statusMessage.kind === 'warning' ? 'rgba(245,166,35,0.25)' : 'rgba(233,32,63,0.25)',
-            color: statusMessage.kind === 'success' ? 'var(--green)' : statusMessage.kind === 'warning' ? '#f5a623' : 'var(--red-hi)',
-          }}>
-            {statusMessage.text}
-          </div>
-        )}
+        {/* Mensagens de erro/status agora aparecem apenas no NotificationBar (topo da página) */}
 
         <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           <div>
