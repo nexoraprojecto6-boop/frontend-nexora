@@ -7,7 +7,7 @@ import { glassCard, inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { show } = useLoader()
+  const { show, hide } = useLoader() as any // hide pode não existir consoante a versão do contexto
   const { isLocalAuthenticated, isLocalLoading, loginLocal } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -37,14 +37,19 @@ export default function LoginPage() {
       loginLocal(res.token, res.user)
       navigate('/connect-deriv')
     } catch (err: any) {
+      // Credenciais erradas → 401 do backend. Mostramos a mensagem certa
+      // em vez de deixar o loader a girar para sempre.
       const msg = err?.message || 'Não foi possível entrar.'
       if (msg.toLowerCase().includes('verific')) {
         navigate('/verify-pending', { state: { email: email.trim() } })
+      } else if (msg.includes('401') || msg.toLowerCase().includes('inválid') || msg.toLowerCase().includes('incorret')) {
+        setError('Email ou senha incorretos.')
       } else {
         setError(msg)
       }
     } finally {
       setIsSubmitting(false)
+      try { hide?.() } catch { /* opcional, LoaderContext pode não ter hide() */ }
     }
   }
 
