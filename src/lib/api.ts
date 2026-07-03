@@ -18,8 +18,27 @@ export interface BotStatusLocal {
   progress: number
 }
 
+export interface LocalUser {
+  id: string
+  fullName: string
+  whatsapp: string
+  email: string
+  role: string
+}
+
+export interface RegisterPayload {
+  fullName: string
+  whatsapp: string
+  email: string
+  password: string
+}
+
 function getToken(): string | null {
   return localStorage.getItem('token')
+}
+
+function getLocalToken(): string | null {
+  return localStorage.getItem('localToken')
 }
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
@@ -45,6 +64,24 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   return response.json()
 }
 
+// Chamada autenticada com o token de LOGIN LOCAL (não confundir com o
+// token de sessão Deriv usado em fetchWithAuth). Usado só em /api/auth/me.
+async function fetchWithLocalAuth(endpoint: string, options: RequestInit = {}) {
+  const token = getLocalToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((options.headers as Record<string, string>) || {}),
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.message || err.error || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
 const LOCAL_STRATEGIES: Strategy[] = [
   { id: '1', name: 'Gpt5.4', description: 'Estratégia principal', isActive: true },
   { id: '2', name: 'Martingale Pro', description: 'Estratégia de recuperação', isActive: false },
@@ -52,6 +89,7 @@ const LOCAL_STRATEGIES: Strategy[] = [
 ]
 
 export const api = {
+  // ── Deriv OAuth (inalterado) ──────────────────────────────
   async startLogin(prompt?: 'registration'): Promise<{ authUrl: string }> {
     const qs = prompt ? `?prompt=${prompt}` : ''
     const res = await fetch(`${API_BASE_URL}/api/auth/login${qs}`, { credentials: 'include' })
@@ -80,6 +118,51 @@ export const api = {
     }
   },
 
+  // ── Registo / Login local ─────────────────────────────────
+  async register(payload: RegisterPayload): Promise<{ success: boolean; message: string; user: LocalUser }> {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
+    }
+    return data
+  },
+
+  async loginLocal(email: string, password: string): Promise<{ success: boolean; token: string; user: LocalUser }> {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login-local`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
+    }
+    return data
+  },
+
+  async resendVerification(email: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
+    }
+    return data
+  },
+
+  async getLocalMe(): Promise<{ success: boolean; user: LocalUser }> {
+    return fetchWithLocalAuth('/api/auth/me')
+  },
+
+  // ── Contas / trading (inalterado) ─────────────────────────
   async getAccounts(): Promise<{ data: Account[] }> {
     const res = await fetchWithAuth('/api/accounts')
     const raw = res?.data?.accounts || res?.data || []
