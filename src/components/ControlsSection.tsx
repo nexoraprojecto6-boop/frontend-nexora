@@ -18,26 +18,10 @@ function Portal({ children }: { children: React.ReactNode }) {
 }
 
 // ── Input numérico controlado por texto local ──────────────────
-// Problema que isto resolve: um <input type="number" value={n}> com
-// onChange={e => onChange(parseFloat(e.target.value) || 0)} nunca
-// fica vazio de verdade — apagar o conteúdo gera parseFloat('') =
-// NaN, que o "|| 0" transforma logo em 0, e o campo "salta" de volta
-// para 0 antes da pessoa conseguir digitar o próximo número.
-//
-// Aqui mantemos um estado de TEXTO local (raw) que pode ficar vazio
-// enquanto a pessoa edita. Só propomos um número válido para o
-// componente pai quando o texto for de facto um número parseável;
-// se o campo ficar vazio, avisamos o pai com `undefined` (em vez de
-// forçar 0), e o valor numérico só é "resolvido" de facto no
-// momento de confirmar o formulário (ver sanitizeNumericValues).
 function NumberField({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; onChange: (v: unknown) => void }) {
   const toText = (v: unknown) => (v === undefined || v === null || Number.isNaN(v as number) ? '' : String(v))
   const [raw, setRaw] = useState<string>(toText(value))
 
-  // Se o valor vindo de fora mudar por outra via (ex: troca de bot
-  // selecionado), sincroniza o texto local — mas nunca enquanto o
-  // campo está vazio por ação do próprio usuário (evita "reencher"
-  // um campo que a pessoa acabou de limpar de propósito).
   const userClearedRef = useRef(false)
   useEffect(() => {
     if (userClearedRef.current) return
@@ -58,7 +42,7 @@ function NumberField({ f, value, onChange }: { f: StrategyFieldDef; value: unkno
 
         if (v === '' || v === '-') {
           userClearedRef.current = true
-          onChange(undefined) // campo limpo — não força 0
+          onChange(undefined)
           return
         }
 
@@ -66,12 +50,7 @@ function NumberField({ f, value, onChange }: { f: StrategyFieldDef; value: unkno
         const parsed = parseFloat(v)
         if (!Number.isNaN(parsed)) onChange(parsed)
       }}
-      onBlur={() => {
-        // Ao sair do campo vazio, não inventamos um valor — deixamos
-        // vazio mesmo. A conversão final para um número válido só
-        // acontece ao confirmar (sanitizeNumericValues), usando
-        // f.defaultValue ou 0 como fallback.
-      }}
+      onBlur={() => {}}
       className="btn-ghost"
       style={{ width: '100%', padding: '10px 12px', fontSize: 14 }}
     />
@@ -104,11 +83,6 @@ function Field({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; on
   return <NumberField f={f} value={value} onChange={onChange} />
 }
 
-// ── Sanitiza valores numéricos antes de enviar ao backend ───────
-// Campos que ficaram vazios (undefined) na hora de confirmar caem
-// para f.defaultValue, ou 0 se não houver default. Só é chamado no
-// momento do Confirmar — durante a digitação o campo pode ficar
-// vazio sem qualquer conversão forçada.
 function sanitizeNumericValues(
   vals: Record<string, unknown>,
   fields: StrategyFieldDef[],
@@ -237,7 +211,13 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
 }
 
 export function ControlsSection() {
-  const { accounts, currentAccount, setCurrentAccount } = useAuth()
+  const { accounts, currentAccount, setCurrentAccount, localUser } = useAuth()
+  // Para administradores, os nomes das contas ficam mais explícitos:
+  // Demo -> "Virtual", Real -> "Ao Vivo" — independente das labels
+  // globais configuráveis em accLabels (essas continuam a valer
+  // para utilizadores normais, definidas em /api/admin/labels).
+  const isAdmin = localUser?.role === 'admin'
+
   const {
     catalogBots, sessionBots, trades, openTrades, wsStatus, isLoadingCatalog,
     lastError, statusMessage, listCatalogBots, startCatalogBot, stopBot, resumeBot,
@@ -246,6 +226,9 @@ export function ControlsSection() {
 
   const [accLabels, setAccLabels] = useState({ realLabel: 'Real', demoLabel: 'Demo' })
   useEffect(() => { api.getAccountLabels().then(setAccLabels).catch(() => {}) }, [])
+
+  const demoLabelDisplay = isAdmin ? 'Virtual' : accLabels.demoLabel
+  const realLabelDisplay = isAdmin ? 'Ao Vivo' : accLabels.realLabel
 
   // ── Sheets em vidro (substituem os antigos dropdowns) ──
   const [showAccSheet, setShowAccSheet] = useState(false)
@@ -307,8 +290,6 @@ export function ControlsSection() {
     return () => clearInterval(id)
   }, [isRunning, progressStep])
 
-  // netPnL / totalWins / totalLosses continuam calculados (usados noutros
-  // componentes, ex. BalanceCard) — apenas não são renderizados aqui.
   const { netPnL, totalWins, totalLosses } = useMemo(() => {
     const active = sessionBots.filter(b => b.stats.totalTrades > 0 || b.status === 'running')
     return {
@@ -336,7 +317,7 @@ export function ControlsSection() {
   const handleAccSelectSheet = async (acc: typeof accounts[number]) => {
     if (currentAccount?.account_id === acc.account_id) { setShowAccSheet(false); return }
     setSwitchingAcc(true)
-    const label = acc.is_virtual ? `Conta ${accLabels.demoLabel}` : `Conta ${accLabels.realLabel}`
+    const label = acc.is_virtual ? `Conta ${demoLabelDisplay}` : `Conta ${realLabelDisplay}`
     loader.show(`A ligar a ${label}…`)
     try {
       await setCurrentAccount(acc)
@@ -364,14 +345,12 @@ export function ControlsSection() {
     }, 600)
   }
 
-  const accLabel = !currentAccount ? 'Selecionar' : currentAccount.is_virtual ? accLabels.demoLabel : accLabels.realLabel
+  const accLabel = !currentAccount ? 'Selecionar' : currentAccount.is_virtual ? demoLabelDisplay : realLabelDisplay
   const accColor = !currentAccount ? 'var(--text-faint)' : currentAccount.is_virtual ? 'var(--blue-hi)' : 'var(--green)'
 
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Mensagens de erro/status agora aparecem apenas no NotificationBar (topo da página) */}
-
         <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           <div>
             <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
@@ -482,7 +461,7 @@ export function ControlsSection() {
                       className={`glass-option ${currentAccount?.account_id === a.account_id ? 'active' : ''}`}
                       onClick={() => handleAccSelectSheet(a)}>
                       <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? 'var(--blue-hi)' : 'var(--green)' }}>
-                        {a.is_virtual ? `Conta ${accLabels.demoLabel}` : `Conta ${accLabels.realLabel}`}
+                        {a.is_virtual ? `Conta ${demoLabelDisplay}` : `Conta ${realLabelDisplay}`}
                       </p>
                       <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Saldo: ${Number(a.balance ?? 0).toFixed(2)}</p>
                     </button>
