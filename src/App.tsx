@@ -20,6 +20,7 @@ import CallbackPage from './pages/CallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import MenuPage from './pages/MenuPage'
 import AdminPage from './pages/AdminPage'
+import VideoLessonsPage from './pages/VideoLessonsPage'
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/menu" element={<MenuPage />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/aprender-a-operar" element={<VideoLessonsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </TradingProvider>
