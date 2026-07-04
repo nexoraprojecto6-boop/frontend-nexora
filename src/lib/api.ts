@@ -26,6 +26,34 @@ export interface LocalUser {
   role: string
 }
 
+// Utilizador completo tal como devolvido pelas rotas de admin
+// (LocalUser do backend sem passwordHash).
+export interface AdminUserRow {
+  id: string
+  fullName: string
+  whatsapp: string
+  email: string
+  role: 'user' | 'admin'
+  status: 'active' | 'blocked'
+  emailVerified: boolean
+  createdAt: number
+  lastLoginAt: number | null
+  lastActiveAt: number | null
+}
+
+export interface AdminStats {
+  total: number
+  active: number
+  inactive: number
+  blocked: number
+  verified: number
+  unverified: number
+  neverLoggedIn: number
+  newToday: number
+  onlineNow: number
+  inactiveAfterDays: number
+}
+
 export interface RegisterPayload {
   fullName: string
   whatsapp: string
@@ -65,14 +93,21 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
 }
 
 // Chamada autenticada com o token de LOGIN LOCAL (não confundir com o
-// token de sessão Deriv usado em fetchWithAuth). Usado só em /api/auth/me.
+// token de sessão Deriv usado em fetchWithAuth).
+//
+// CORREÇÃO: o backend (requireLocalAuth) lê o header
+// "x-local-authorization", não "Authorization" — este último já é
+// usado pelo token de sessão Deriv nas rotas de trading, por isso o
+// backend usa um header próprio para não colidirem. Antes desta
+// correção, todas as chamadas aqui (getLocalMe, rotas de admin)
+// falhavam silenciosamente a autenticação.
 async function fetchWithLocalAuth(endpoint: string, options: RequestInit = {}) {
   const token = getLocalToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
   }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (token) headers['x-local-authorization'] = `Bearer ${token}`
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers })
   if (!response.ok) {
@@ -158,12 +193,6 @@ export const api = {
     return data
   },
 
-  // Chama o backend para consumir o token de verificação (usa a rota
-  // POST /api/auth/verify-email, que já existe no auth.routes.ts).
-  // O link no email aponta para o FRONTEND (não para esta rota
-  // diretamente) para evitar que scanners de segurança de email
-  // "cliquem" no link automaticamente e gastem o token antes do
-  // utilizador real abrir a página.
   async verifyEmail(token: string): Promise<{ success: boolean; token: string; user: LocalUser }> {
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
       method: 'POST',
@@ -179,6 +208,22 @@ export const api = {
 
   async getLocalMe(): Promise<{ success: boolean; user: LocalUser }> {
     return fetchWithLocalAuth('/api/auth/me')
+  },
+
+  // ── Admin: utilizadores locais ────────────────────────────
+  async getAdminStats(): Promise<{ success: boolean; stats: AdminStats }> {
+    return fetchWithLocalAuth('/api/admin/users/stats')
+  },
+
+  async getAdminUsers(): Promise<{ success: boolean; users: AdminUserRow[]; total: number }> {
+    return fetchWithLocalAuth('/api/admin/users')
+  },
+
+  async setUserStatus(id: string, status: 'active' | 'blocked'): Promise<{ success: boolean; user: AdminUserRow }> {
+    return fetchWithLocalAuth(`/api/admin/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    })
   },
 
   // ── Contas / trading (inalterado) ─────────────────────────
