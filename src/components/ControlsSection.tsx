@@ -224,11 +224,11 @@ export function ControlsSection() {
   } = useBots()
   const loader = useLoader()
 
-  const [accLabels, setAccLabels] = useState({ realLabel: 'Real', demoLabel: 'Demo' })
+  const [accLabels, setAccLabels] = useState({ REALLabel: 'REAL', DEMOLabel: 'DEMO' })
   useEffect(() => { api.getAccountLabels().then(setAccLabels).catch(() => {}) }, [])
 
-  const demoLabelDisplay = isAdmin ? 'Virtual' : accLabels.demoLabel
-  const realLabelDisplay = isAdmin ? 'Ao Vivo' : accLabels.realLabel
+  const DEMOLabelDisplay = isAdmin ? 'REAL' : accLabels.DEMOLabel
+  const REALLabelDisplay = isAdmin ? 'DEMO' : accLabels.REALLabel
 
   // ── Sheets em vidro (substituem os antigos dropdowns) ──
   const [showAccSheet, setShowAccSheet] = useState(false)
