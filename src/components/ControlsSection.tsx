@@ -230,6 +230,12 @@ export function ControlsSection() {
   const demoLabelDisplay = isAdmin ? 'REAL' : accLabels.demoLabel
   const realLabelDisplay = isAdmin ? 'DEMO' : accLabels.realLabel
 
+  // Cores também invertidas para admin: Virtual fica verde,
+  // Ao Vivo fica azul (para utilizadores normais mantém-se
+  // Demo=azul / Real=verde, como sempre foi).
+  const demoColorDisplay = isAdmin ? 'var(--green)' : 'var(--blue-hi)'
+  const realColorDisplay = isAdmin ? 'var(--blue-hi)' : 'var(--green)'
+
   // ── Sheets em vidro (substituem os antigos dropdowns) ──
   const [showAccSheet, setShowAccSheet] = useState(false)
   const [showBotSheet, setShowBotSheet] = useState(false)
@@ -346,7 +352,7 @@ export function ControlsSection() {
   }
 
   const accLabel = !currentAccount ? 'Selecionar' : currentAccount.is_virtual ? demoLabelDisplay : realLabelDisplay
-  const accColor = !currentAccount ? 'var(--text-faint)' : currentAccount.is_virtual ? 'var(--blue-hi)' : 'var(--green)'
+  const accColor = !currentAccount ? 'var(--text-faint)' : currentAccount.is_virtual ? demoColorDisplay : realColorDisplay
 
   return (
     <>
@@ -460,7 +466,7 @@ export function ControlsSection() {
                     <button key={a.account_id}
                       className={`glass-option ${currentAccount?.account_id === a.account_id ? 'active' : ''}`}
                       onClick={() => handleAccSelectSheet(a)}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? 'var(--blue-hi)' : 'var(--green)' }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? demoColorDisplay : realColorDisplay }}>
                         {a.is_virtual ? `Conta ${demoLabelDisplay}` : `Conta ${realLabelDisplay}`}
                       </p>
                       <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Saldo: ${Number(a.balance ?? 0).toFixed(2)}</p>
