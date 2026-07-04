@@ -69,14 +69,18 @@ function MenuItem({ icon, label, onClick, href, external = false, color, badge }
 
 export default function MenuPage() {
   const navigate = useNavigate()
-  const { currentAccount, logout } = useAuth()
+  const { currentAccount, logout, localUser } = useAuth()
   const { show, complete, hide } = useLoader()
 
   const [onlineCount, setOnlineCount] = useState<number | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [avisosOpen, setAvisosOpen] = useState(false)
   const [termosOpen, setTermosOpen] = useState(false)
+
+  // O role vem do token de sessão local (login com email + senha),
+  // não do check antigo por conta Deriv — reflete diretamente
+  // ADMIN_EMAILS do backend.
+  const isAdmin = localUser?.role === 'admin'
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -94,16 +98,13 @@ export default function MenuPage() {
     try {
       const r = await api.getOnlineCount()
       setOnlineCount(r.count)
-      if (currentAccount) {
-        const { isAdmin: a } = await api.checkAdmin(currentAccount.account_id)
-        setIsAdmin(a)
-      }
       complete('Pronto!')
     } catch { hide() } finally { setIsLoading(false) }
   }
 
   const goBack = () => { show('A carregar...'); navigate('/dashboard') }
   const handleLogout = async () => { show('A sair...'); await logout() }
+  const goToAdmin = () => { show('A carregar painel admin...'); navigate('/admin') }
 
   if (isLoading) return null
 
@@ -143,10 +144,10 @@ export default function MenuPage() {
           </div>
           <div>
             <p style={{ color: 'var(--white)', fontWeight: 600, fontSize: 14 }}>
-              {currentAccount?.full_name || currentAccount?.name || 'Utilizador'}
+              {localUser?.fullName || currentAccount?.full_name || currentAccount?.name || 'Utilizador'}
             </p>
             <p style={{ color: 'var(--text-faint)', fontSize: 12 }}>
-              {currentAccount?.account_id || currentAccount?.loginid || '-'}
+              {localUser?.email || currentAccount?.account_id || currentAccount?.loginid || '-'}
             </p>
           </div>
           {isAdmin && (
@@ -155,6 +156,15 @@ export default function MenuPage() {
             </span>
           )}
         </div>
+
+        {/* Botão Admin — só aparece para quem tem role 'admin' */}
+        {isAdmin && (
+          <div className="card" style={{ marginBottom: 12, padding: 8 }}>
+            <MenuItem onClick={goToAdmin}
+              icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
+              label="PAINEL ADMIN" color="#f5a623" />
+          </div>
+        )}
 
         {/* Secção principal */}
         <div className="card" style={{ marginBottom: 12, padding: 8 }}>
