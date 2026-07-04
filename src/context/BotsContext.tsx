@@ -11,6 +11,7 @@ import { useNexoraWs } from '../hooks/useNexoraWs'
 import { useAuth } from './AuthContext'
 import { useTrading } from './TradingContext'
 import type { Trade } from './TradingContext'
+import { playGainSound } from '../lib/sound'
 
 export interface TradeRecord {
   id: string
@@ -171,6 +172,12 @@ export function BotsProvider({ children }: { children: ReactNode }) {
         setBotTrades(prev => ({ ...prev, [botId]: [rec, ...(prev[botId] ?? [])].slice(0, MAX_TRADES) }))
         const t: Trade = { id: rec.id, hora: rec.hora, tipo: rec.contractType ?? strategy, tickFinal: rec.exitTick ?? 0, preco: `$${rec.stake.toFixed(2)}`, resultado: rec.profit }
         trading._addTrade(t)
+
+        // 🔊 Som de "gain" — só quando o trade fecha com ganho (won).
+        // playGainSound() já verifica internamente se o som está
+        // ativado (preferência em localStorage via lib/sound.ts).
+        if (p.won) playGainSound()
+
         trading._setBotStatus({ isRunning: true, currentStep: 'contract_closed' })
         setTimeout(() => trading._setBotStatus({ isRunning: true, currentStep: 'analyzing' }), 1500); break
       }
