@@ -6,6 +6,57 @@ import { api } from '../lib/api'
 
 const WHATSAPP = '976289984'
 
+// ============================================================
+// Contagem de "online" SIMULADA (não vem do backend).
+//
+// Começa perto de BASE_ONLINE (406) e evolui como um "random walk"
+// com tendência de subida: a cada tick tem mais probabilidade de
+// subir 1 a 4 do que descer, e fica limitada a uma banda razoável
+// para nunca parecer absurda. O valor é guardado em localStorage
+// para não "saltar" de forma estranha ao recarregar a página —
+// continua de onde estava, como uma contagem real continuaria.
+// ============================================================
+const BASE_ONLINE = 406
+const ONLINE_MIN = 380
+const ONLINE_MAX = 520
+const SIM_STORAGE_KEY = 'nexora_online_sim'
+const SIM_MAX_AGE_MS = 12 * 60 * 60 * 1000 // reinicia a simulação após 12h parada
+
+function loadSimulatedOnline(): number {
+  try {
+    const raw = localStorage.getItem(SIM_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as { value: number; ts: number }
+      if (Date.now() - parsed.ts < SIM_MAX_AGE_MS) {
+        return parsed.value
+      }
+    }
+  } catch { /* ignora e reinicia abaixo */ }
+  return BASE_ONLINE + Math.floor(Math.random() * 6) - 3 // 403–409
+}
+
+function saveSimulatedOnline(value: number) {
+  try {
+    localStorage.setItem(SIM_STORAGE_KEY, JSON.stringify({ value, ts: Date.now() }))
+  } catch { /* localStorage indisponível — sem problema, é só cosmético */ }
+}
+
+function nextSimulatedOnline(current: number): number {
+  // 65% sobe (1 a 4), 20% mantém, 15% desce (1 a 2) — tendência
+  // de crescimento com oscilação natural, como visto num contador
+  // real de utilizadores online.
+  const roll = Math.random()
+  let delta: number
+  if (roll < 0.65) delta = 1 + Math.floor(Math.random() * 4) // +1 a +4
+  else if (roll < 0.85) delta = 0
+  else delta = -(1 + Math.floor(Math.random() * 2)) // -1 a -2
+
+  let next = current + delta
+  if (next < ONLINE_MIN) next = ONLINE_MIN + Math.floor(Math.random() * 5)
+  if (next > ONLINE_MAX) next = ONLINE_MAX - Math.floor(Math.random() * 5)
+  return next
+}
+
 const LOCAL_AVISOS = [
   { id: '1', titulo: 'Manutenção programada', mensagem: 'O sistema estará em manutenção no dia 30/04 das 02h às 04h.', data: '28/04/2026' },
   { id: '2', titulo: 'Nova estratégia disponível', mensagem: 'A estratégia Gpt5.4 foi atualizada com melhorias de precisão.', data: '27/04/2026' },
@@ -85,19 +136,25 @@ export default function MenuPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) { navigate('/'); return }
+
+    // Contagem simulada — ver funções no topo do ficheiro.
+    setOnlineCount(loadSimulatedOnline())
     loadData()
-    const iv = setInterval(async () => {
-      const r = await api.getOnlineCount().catch(() => ({ count: 0 }))
-      setOnlineCount(r.count)
-    }, 15000)
+
+    const iv = setInterval(() => {
+      setOnlineCount((prev) => {
+        const next = nextSimulatedOnline(prev ?? BASE_ONLINE)
+        saveSimulatedOnline(next)
+        return next
+      })
+    }, 4000 + Math.random() * 4000) // a cada 4–8s, para não parecer um timer perfeito
+
     return () => clearInterval(iv)
   }, [])
 
   const loadData = async () => {
     show('A carregar perfil...')
     try {
-      const r = await api.getOnlineCount()
-      setOnlineCount(r.count)
       complete('Pronto!')
     } catch { hide() } finally { setIsLoading(false) }
   }
