@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLoader } from '../context/LoaderContext'
 import { api } from '../lib/api'
+import { isSoundEnabled, setSoundEnabled, playGainSound } from '../lib/sound'
 
 const WHATSAPP = '976289984'
 
@@ -127,6 +128,16 @@ export default function MenuPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [avisosOpen, setAvisosOpen] = useState(false)
   const [termosOpen, setTermosOpen] = useState(false)
+  const [soundOn, setSoundOn] = useState(true)
+
+  useEffect(() => { setSoundOn(isSoundEnabled()) }, [])
+
+  const handleToggleSound = () => {
+    const next = !soundOn
+    setSoundOn(next)
+    setSoundEnabled(next)
+    if (next) playGainSound() // dá um preview do som ao ligar
+  }
 
   // O role vem do token de sessão local (login com email + senha),
   // não do check antigo por conta Deriv — reflete diretamente
@@ -235,10 +246,38 @@ export default function MenuPage() {
             href={`https://hub.deriv.com/tradershub/signup?t=hCp-xUFsKsktJe5FDKcTD2Nd7ZgqdRLk&utm_campaign=NEXORA&utm_medium=affiliate&utm_source=hCp-xUFsKsktJe5FDKcTD2Nd7ZgqdRLk`}
             external icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>}
             label="CADASTRO NA CORRETORA" color="var(--red-hi)" />
+          <MenuItem onClick={() => { show('A carregar...'); navigate('/aprender-a-operar') }}
+            icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422A12.083 12.083 0 0119 15.5V19a1 1 0 01-1 1H6a1 1 0 01-1-1v-3.5a12.083 12.083 0 011.84-4.922L12 14z" /></svg>}
+            label="APRENDE A OPERAR" color="#f5a623" />
           <MenuItem
             href={`https://wa.me/${WHATSAPP}?text=Ol%C3%A1%2C%20quero%20saber%20mais%20sobre%20a%20Mentoria%20VIP`}
             external icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>}
             label="MENTORIA VIP WHATSAPP" color="var(--green)" />
+        </div>
+
+        {/* Som de ganho (gain) */}
+        <div className="card" style={{ marginBottom: 12, padding: 8 }}>
+          <button onClick={handleToggleSound} style={{
+            width: '100%', padding: '12px 14px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12, background: 'transparent', cursor: 'pointer', border: 'none',
+          }}>
+            <span style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-card-hi)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: soundOn ? 'var(--green)' : 'var(--text-faint)', flexShrink: 0 }}>
+              {soundOn ? (
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M6 8v8H4a1 1 0 01-1-1V9a1 1 0 011-1h2zm0 0l5.5-4.5A1 1 0 0113 4.29v15.42a1 1 0 01-1.5.79L6 16" /></svg>
+              ) : (
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8v8H4a1 1 0 01-1-1V9a1 1 0 011-1h2zm0 0l5.5-4.5A1 1 0 0113 4.29v15.42a1 1 0 01-1.5.79L6 16m9-6l4 4m0-4l-4 4" /></svg>
+              )}
+            </span>
+            <span style={{ flex: 1, color: 'var(--white)', fontSize: 14, fontWeight: 500, textAlign: 'left' }}>SOM DE GANHO</span>
+            <span style={{
+              position: 'relative', width: 40, height: 20, borderRadius: 10,
+              background: soundOn ? 'var(--blue)' : 'var(--border-hi)', transition: 'background .15s', flexShrink: 0,
+            }}>
+              <span style={{
+                position: 'absolute', top: 2, left: soundOn ? 22 : 2, width: 16, height: 16, borderRadius: '50%',
+                background: 'white', transition: 'left .15s', boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+              }} />
+            </span>
+          </button>
         </div>
 
         {/* Avisos */}
