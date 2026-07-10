@@ -14,9 +14,9 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 // ── Config ───────────────────────────────────────────────────
 const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
 const HISTORY_LOAD = 1000
-const SMOOTH       = 0.09
-const PING_MS      = 25_000
-const RECONNECT_MS = 2_500
+const ANIM_MS       = 300   // duração fixa da animação linear das barras/percentagens
+const PING_MS       = 25_000
+const RECONNECT_MS  = 2_500
 
 // Cores exactas da imagem de referência
 const COLOR_HOT     = '#2e7d32'   // verde sólido — barra dominante
@@ -97,6 +97,8 @@ export function ChartSection() {
   const target    = useRef<number[]>(Array(10).fill(0))
   const current   = useRef<number[]>(Array(10).fill(0))
   const animating = useRef(false)
+  const animStart = useRef<number[]>(Array(10).fill(0))
+  const animT0    = useRef(0)
   const wsRef     = useRef<WebSocket | null>(null)
   const pingRef   = useRef<ReturnType<typeof setInterval> | null>(null)
   const reconnRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -106,22 +108,25 @@ export function ChartSection() {
   winRef.current  = win
   symRef.current  = symbol
 
-  // ── RAF — animação suave apenas em novos ticks ─────────────
+  // ── RAF — animação linear (normal), sem easing/curva cúbica ─
   const startRaf = useCallback(() => {
+    animStart.current = [...current.current]
+    animT0.current = performance.now()
     if (animating.current) return
     animating.current = true
-    const tick = () => {
+    const tick = (now: number) => {
       if (!mounted.current) { animating.current = false; return }
-      const c = current.current
+      const elapsed = now - animT0.current
+      const p = Math.min(1, elapsed / ANIM_MS) // progresso linear, 0→1
+      const s = animStart.current
       const t = target.current
-      let dirty = false
+      const c = current.current
       for (let i = 0; i < 10; i++) {
-        const d = t[i] - c[i]
-        if (Math.abs(d) > 0.01) { c[i] += d * SMOOTH; dirty = true }
-        else c[i] = t[i]
+        c[i] = s[i] + (t[i] - s[i]) * p
       }
-      if (dirty) { setBars([...c]); requestAnimationFrame(tick) }
-      else       { setBars([...c]); animating.current = false }
+      setBars([...c])
+      if (p < 1) { requestAnimationFrame(tick) }
+      else       { animating.current = false }
     }
     requestAnimationFrame(tick)
   }, [])
