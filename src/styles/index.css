@@ -1,24 +1,24 @@
 /* ============================================================
-   NEXORA FOREX — Design Tokens
-   Tema "casa de apostas": fundo quase-preto, azul eléctrico
-   como cor primária de acção, vermelho reservado para risco/
-   stop/perda, branco para texto e contraste máximo.
+   NEXORA FOREX — Design Tokens (paleta Bertoni)
+   Base azul-marinho quase-preto + azul-roxo como cor primária
+   de acção, vermelho reservado para risco/stop/perda, branco
+   para texto e contraste máximo.
    ============================================================ */
 
 :root {
-  /* Base */
-  --bg:            #070b14;
-  --bg-elevated:   #0d1424;
-  --bg-card:       #10192e;
-  --bg-card-hi:    #16213d;
-  --border:        #1f2c4a;
-  --border-hi:     #2c3d63;
+  /* Base — inspirada em --color6 (#001428) e --color2 (#0a07a6) do Bertoni */
+  --bg:            #001428;
+  --bg-elevated:   #041b33;
+  --bg-card:       #051f3d;
+  --bg-card-hi:    #0a2847;
+  --border:        #13324f;
+  --border-hi:     #1c4468;
 
-  /* Azul — acção primária, links, foco */
-  --blue:          #1857ff;
-  --blue-hi:       #3f74ff;
-  --blue-dim:      #0d2e8c;
-  --blue-glow:     rgba(24, 87, 255, 0.35);
+  /* Azul-roxo — acção primária, links, foco (inspirado em --color3/--color4 do Bertoni) */
+  --blue:          #5862BF;
+  --blue-hi:       #7683FF;
+  --blue-dim:      #3a4390;
+  --blue-glow:     rgba(118, 131, 255, 0.35);
 
   /* Vermelho — risco, perda, parar, sair */
   --red:           #e9203f;
@@ -32,8 +32,8 @@
   /* Texto */
   --white:         #ffffff;
   --text:          #eef1f8;
-  --text-dim:      #8993ad;
-  --text-faint:    #515d7d;
+  --text-dim:      #C0C1C6;
+  --text-faint:    #7f8aa8;
 
   /* Tipografia */
   --font-display:  'Rajdhani', system-ui, sans-serif;
@@ -64,7 +64,8 @@ body {
   overflow-x: hidden;
 }
 
-/* Fundo com leve textura radial — dá profundidade sem ruído */
+/* Fundo com leve textura radial — dá profundidade sem ruído.
+   Tons de azul-roxo (Bertoni --color3) em vez do azul puro anterior. */
 body::before {
   content: '';
   position: fixed;
@@ -72,8 +73,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 15% -10%, rgba(24, 87, 255, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 100% 10%, rgba(233, 32, 63, 0.10) 0%, transparent 40%);
+    radial-gradient(circle at 15% -10%, rgba(118, 131, 255, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 100% 10%, rgba(233, 32, 63, 0.08) 0%, transparent 40%);
 }
 
 #root {
@@ -200,8 +201,6 @@ a {
    (nenhuma lógica de negócio foi alterada, apenas CSS)
    ============================================================ */
 
-/* Gráfico: altura ajustável por breakpoint, dá prioridade ao
-   espaço da tela para os demais componentes caberem sem cortar */
 .chart-bars-wrap {
   --chart-h: 220px;
   --chart-bar-max: 170px;
@@ -214,13 +213,10 @@ a {
   .chart-bars-wrap { --chart-h: 145px; --chart-bar-max: 100px; }
 }
 
-/* Segurança extra contra scroll horizontal em telas pequenas */
 @media (max-width: 1023px) {
   .card { max-width: 100%; }
 }
 
-/* Grid de controles (Tipo de Conta / Estratégia) e a
-   faixa de estatísticas ficam mais compactas em telas estreitas */
 @media (max-width: 480px) {
   .controls-grid { gap: 8px; }
   .stats-strip { gap: 10px; padding: 8px 10px; flex-wrap: wrap; }
@@ -230,7 +226,6 @@ a {
    GLASS UI — banner de notificações + sheets de selecção
    ============================================================ */
 
-/* ── Banner de notificações (topo, flutuante) ── */
 .glass-banner {
   position: fixed;
   top: 10px;
@@ -243,7 +238,7 @@ a {
   gap: 10px;
   padding: 12px 14px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(22,33,61,0.55), rgba(16,25,46,0.35));
+  background: linear-gradient(135deg, rgba(88,98,191,0.45), rgba(5,31,61,0.4));
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   border: 1px solid rgba(255,255,255,0.08);
@@ -262,13 +257,11 @@ a {
 }
 .glass-banner-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 
-/* ── Overlay + sheet de vidro (selecção de conta / estratégia)
-   Sempre centralizado na tela — desktop e mobile ── */
 .glass-overlay {
   position: fixed;
   inset: 0;
   z-index: 600;
-  background: rgba(5,8,16,0.45);
+  background: rgba(0,10,20,0.5);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -284,7 +277,7 @@ a {
   max-width: 420px;
   max-height: 72vh;
   border-radius: 22px;
-  background: linear-gradient(160deg, rgba(24,36,64,0.65), rgba(13,20,36,0.55));
+  background: linear-gradient(160deg, rgba(88,98,191,0.4), rgba(4,27,51,0.6));
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255,255,255,0.10);
@@ -321,7 +314,7 @@ a {
   transition: background 0.15s, border-color 0.15s;
 }
 .glass-option:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
-.glass-option.active { background: rgba(63,116,255,0.14); border-color: rgba(63,116,255,0.35); }
+.glass-option.active { background: rgba(118,131,255,0.16); border-color: rgba(118,131,255,0.4); }
 
 .glass-sheet-loader {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
