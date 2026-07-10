@@ -1,524 +1,343 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { useAuth } from '../context/AuthContext'
-import { useBots } from '../context/BotsContext'
-import {
-  getCommonConfigFields, STRATEGY_PARAMS_FIELDS, STRATEGY_LABELS,
-} from '../lib/types'
-import type { BotConfig, CatalogBot, StrategyFieldDef } from '../lib/types'
-import { useLoader } from '../context/LoaderContext'
-import { api } from '../lib/api'
+// ============================================================
+// NEXORA FOREX — ChartSection  v4
+// Design: igual à imagem de referência
+//   - Barras neutras: cinza azulado (paleta Bertoni)
+//   - Barra hot (máx): verde sólido (#2e7d32)
+//   - Barras cold (mín): vermelho sólido (#c62828)
+//   - Sem gradientes, sem glow, sem neon — flat e limpo
+//   - Header: ícone | Last Digits: X | N ticks | selector
+// Lógica de dados: idêntica (WS pública + ticks_history)
+// ============================================================
 
-// ── Portal: monta o conteúdo direto no <body>, fora de qualquer
-//    container com overflow/scroll, para evitar o bug de mobile
-//    onde position:fixed aninhado em overflow:auto não centraliza
-//    corretamente (comum em iOS Safari / alguns WebViews Android) ──
-function Portal({ children }: { children: React.ReactNode }) {
-  return createPortal(children, document.body)
+import { useState, useRef, useEffect, useCallback } from 'react'
+
+// ── Config ───────────────────────────────────────────────────
+const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
+const HISTORY_LOAD = 1000
+const SMOOTH       = 0.09
+const PING_MS      = 25_000
+const RECONNECT_MS = 2_500
+
+// Cores exactas da imagem de referência
+const COLOR_HOT     = '#2e7d32'   // verde sólido — barra dominante
+const COLOR_COLD    = '#c62828'   // vermelho sólido — barras mais fracas
+const COLOR_NEUTRAL = '#8f99c4'   // cinza azulado — barras neutras (paleta Bertoni)
+
+const SYMBOLS = [
+  { value: '1HZ100V', label: 'Vol 100 (1s)' },
+  { value: '1HZ10V',  label: 'Vol 10 (1s)'  },
+  { value: 'R_100',   label: 'Vol 100'       },
+  { value: 'R_75',    label: 'Vol 75'        },
+  { value: 'R_50',    label: 'Vol 50'        },
+  { value: 'R_25',    label: 'Vol 25'        },
+  { value: 'R_10',    label: 'Vol 10'        },
+]
+const WINDOWS = [25, 50, 100, 250, 500, 1000]
+
+// ── Utilitários ───────────────────────────────────────────────
+function lastDigit(q: number): number {
+  const s = q.toFixed(2)
+  return parseInt(s[s.length - 1], 10)
 }
 
-// ── Input numérico controlado por texto local ──────────────────
-function NumberField({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; onChange: (v: unknown) => void }) {
-  const toText = (v: unknown) => (v === undefined || v === null || Number.isNaN(v as number) ? '' : String(v))
-  const [raw, setRaw] = useState<string>(toText(value))
+function calcPcts(hist: number[], win: number): number[] {
+  const slice  = hist.slice(-win)
+  const counts = Array(10).fill(0) as number[]
+  slice.forEach(d => counts[d]++)
+  const n = slice.length || 1
+  return counts.map(c => (c / n) * 100)
+}
 
-  const userClearedRef = useRef(false)
+function calcAll(hist: number[], win: number) {
+  const slice  = hist.slice(-win)
+  const n      = slice.length || 1
+  const counts = Array(10).fill(0) as number[]
+  let even = 0, over = 0
+  slice.forEach(d => { counts[d]++; if (d % 2 === 0) even++; if (d >= 5) over++ })
+  const pcts   = counts.map(c => (c / n) * 100)
+  const maxPct = Math.max(...pcts)
+  const minPct = Math.min(...pcts)
+  return {
+    pcts, maxPct, minPct,
+    hotDigit:  pcts.indexOf(maxPct),
+    coldDigit: pcts.indexOf(minPct),
+    evenPct:   (even / n) * 100,
+    overPct:   (over / n) * 100,
+    total:     slice.length,
+  }
+}
+
+// ── Ícones inline (sem dependências externas) ─────────────────
+const IconBar = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="2"  y="12" width="4" height="10" rx="1"/>
+    <rect x="9"  y="7"  width="4" height="15" rx="1"/>
+    <rect x="16" y="3"  width="4" height="19" rx="1"/>
+  </svg>
+)
+const IconChevron = ({ up }: { up?: boolean }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <path d={up ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}/>
+  </svg>
+)
+
+// ── Componente principal ──────────────────────────────────────
+export function ChartSection() {
+  const [symbol,  setSymbol]  = useState('1HZ100V')
+  const [win,     setWin]     = useState(25)
+  const [phase,   setPhase]   = useState<'connecting'|'loading'|'live'|'error'>('connecting')
+  const [quote,   setQuote]   = useState<number | null>(null)
+  const [tkCnt,   setTkCnt]   = useState(0)
+  const [info,    setInfo]    = useState(() => calcAll([], 25))
+  const [bars,    setBars]    = useState<number[]>(Array(10).fill(0))
+  const [winOpen, setWinOpen] = useState(false)
+
+  // Refs internas
+  const hist      = useRef<number[]>([])
+  const target    = useRef<number[]>(Array(10).fill(0))
+  const current   = useRef<number[]>(Array(10).fill(0))
+  const animating = useRef(false)
+  const wsRef     = useRef<WebSocket | null>(null)
+  const pingRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const reconnRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mounted   = useRef(true)
+  const winRef    = useRef(win)
+  const symRef    = useRef(symbol)
+  winRef.current  = win
+  symRef.current  = symbol
+
+  // ── RAF — animação suave apenas em novos ticks ─────────────
+  const startRaf = useCallback(() => {
+    if (animating.current) return
+    animating.current = true
+    const tick = () => {
+      if (!mounted.current) { animating.current = false; return }
+      const c = current.current
+      const t = target.current
+      let dirty = false
+      for (let i = 0; i < 10; i++) {
+        const d = t[i] - c[i]
+        if (Math.abs(d) > 0.01) { c[i] += d * SMOOTH; dirty = true }
+        else c[i] = t[i]
+      }
+      if (dirty) { setBars([...c]); requestAnimationFrame(tick) }
+      else       { setBars([...c]); animating.current = false }
+    }
+    requestAnimationFrame(tick)
+  }, [])
+
+  const applyPcts = useCallback((pcts: number[], snap = false) => {
+    target.current = [...pcts]
+    if (snap) { current.current = [...pcts]; setBars([...pcts]) }
+    else startRaf()
+  }, [startRaf])
+
+  const onTick = useCallback((price: number) => {
+    const d = lastDigit(price)
+    hist.current.push(d)
+    if (hist.current.length > 5000) hist.current = hist.current.slice(-5000)
+    const pcts = calcPcts(hist.current, winRef.current)
+    const all  = calcAll(hist.current, winRef.current)
+    applyPcts(pcts, false)
+    setInfo(all)
+    setQuote(price)
+    setTkCnt(hist.current.length)
+
+    setPhase('live')
+  }, [applyPcts])
+
+  const connect = useCallback((sym: string) => {
+    if (pingRef.current)   clearInterval(pingRef.current)
+    if (reconnRef.current) clearTimeout(reconnRef.current)
+    if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
+
+    setPhase('connecting')
+    const ws = new WebSocket(PUBLIC_WS)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      if (!mounted.current) { ws.close(); return }
+      setPhase('loading')
+      ws.send(JSON.stringify({ ticks_history: sym, end: 'latest', count: HISTORY_LOAD, style: 'ticks', req_id: 1 }))
+      ws.send(JSON.stringify({ ticks: sym, subscribe: 1, req_id: 2 }))
+      pingRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }))
+      }, PING_MS)
+    }
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data as string)
+      if (msg.error) return
+      if (msg.msg_type === 'history' && Array.isArray(msg.history?.prices)) {
+        hist.current = (msg.history.prices as number[]).map(lastDigit)
+        const pcts = calcPcts(hist.current, winRef.current)
+        const all  = calcAll(hist.current, winRef.current)
+        applyPcts(pcts, true)   // snap — sem animar do zero
+        setInfo(all)
+        setTkCnt(hist.current.length)
+
+        setPhase('live')
+        return
+      }
+      if (msg.msg_type === 'tick' && msg.tick?.quote != null) {
+        onTick(msg.tick.quote as number)
+      }
+    }
+
+    ws.onerror = () => { if (mounted.current) setPhase('error') }
+    ws.onclose = () => {
+      if (!mounted.current) return
+      if (pingRef.current) clearInterval(pingRef.current)
+      reconnRef.current = setTimeout(() => connect(symRef.current), RECONNECT_MS)
+    }
+  }, [applyPcts, onTick])
+
   useEffect(() => {
-    if (userClearedRef.current) return
-    setRaw(toText(value))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value])
+    hist.current    = []
+    target.current  = Array(10).fill(0)
+    current.current = Array(10).fill(0)
+    setBars(Array(10).fill(0))
+    setTkCnt(0)
+    setQuote(null)
+    setInfo(calcAll([], win))
+    connect(symbol)
+  }, [symbol]) // eslint-disable-line
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      if (pingRef.current)   clearInterval(pingRef.current)
+      if (reconnRef.current) clearTimeout(reconnRef.current)
+      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (hist.current.length === 0) return
+    const pcts = calcPcts(hist.current, win)
+    const all  = calcAll(hist.current, win)
+    applyPcts(pcts, false)
+    setInfo(all)
+  }, [win, applyPcts])
+
+  // Cor de cada barra — flat, sem gradiente
+  const maxPct = info.maxPct
+  const minPct = info.minPct
+
+  function getBarColor(pct: number): string {
+    if (Math.abs(pct - maxPct) < 0.01) return COLOR_HOT
+    if (Math.abs(pct - minPct) < 0.01) return COLOR_COLD
+    return COLOR_NEUTRAL
+  }
+
+  const lastD    = hist.current.length > 0 ? hist.current[hist.current.length - 1] : null
+  const maxBar   = Math.max(...bars, 10)
+  const symLabel = SYMBOLS.find(s => s.value === symbol)?.label ?? symbol
 
   return (
-    <input
-      type="number"
-      value={raw}
-      min={f.min}
-      max={f.max}
-      step={f.step ?? 1}
-      onChange={(e) => {
-        const v = e.target.value
-        setRaw(v)
+    <div className="card" style={{ overflow: 'visible' }}>
 
-        if (v === '' || v === '-') {
-          userClearedRef.current = true
-          onChange(undefined)
-          return
-        }
-
-        userClearedRef.current = false
-        const parsed = parseFloat(v)
-        if (!Number.isNaN(parsed)) onChange(parsed)
-      }}
-      onBlur={() => {}}
-      className="btn-ghost"
-      style={{ width: '100%', padding: '10px 12px', fontSize: 14 }}
-    />
-  )
-}
-
-function Field({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; onChange: (v: unknown) => void }) {
-  if (f.type === 'toggle') {
-    return (
-      <button type="button" onClick={() => onChange(!value)} style={{
-        position: 'relative', width: 40, height: 20, borderRadius: 10,
-        background: value ? 'var(--blue)' : 'var(--border-hi)', transition: 'background .15s',
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 14px', borderBottom: '1px solid var(--border)',
       }}>
-        <span style={{
-          position: 'absolute', top: 2, left: value ? 22 : 2, width: 16, height: 16, borderRadius: '50%',
-          background: 'white', transition: 'left .15s', boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
-        }} />
-      </button>
-    )
-  }
-  if (f.type === 'select') {
-    return (
-      <select value={value as string} onChange={e => onChange(e.target.value)} className="btn-ghost" style={{
-        width: '100%', padding: '10px 12px', fontSize: 14, appearance: 'none', cursor: 'pointer',
-      }}>
-        {f.options?.map(o => <option key={o.value} value={o.value} style={{ background: 'var(--bg-card)' }}>{o.label}</option>)}
-      </select>
-    )
-  }
-  return <NumberField f={f} value={value} onChange={onChange} />
-}
-
-function sanitizeNumericValues(
-  vals: Record<string, unknown>,
-  fields: StrategyFieldDef[],
-): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...vals }
-  fields.forEach((f) => {
-    if (f.type === 'toggle' || f.type === 'select') return
-    const v = out[f.key]
-    if (v === undefined || v === null || (typeof v === 'number' && Number.isNaN(v))) {
-      out[f.key] = f.defaultValue !== undefined ? f.defaultValue : 0
-    }
-  })
-  return out
-}
-
-function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: () => void; onConfirm: (c: Partial<BotConfig>) => void }) {
-  const commonFields = useMemo(() => getCommonConfigFields(bot.strategy), [bot.strategy])
-
-  const [cfgVals, setCfgVals] = useState<Record<string, unknown>>(() => {
-    const v: Record<string, unknown> = {}
-    commonFields.forEach(f => {
-      const catalogVal = (bot.defaultConfig as unknown as Record<string, unknown>)[f.key]
-      v[f.key] = catalogVal !== undefined ? catalogVal : f.defaultValue
-    })
-    return v
-  })
-
-  const [prmVals, setPrmVals] = useState<Record<string, unknown>>(() => {
-    const v: Record<string, unknown> = {}
-    const fields = STRATEGY_PARAMS_FIELDS[bot.strategy] ?? []
-    fields.forEach(f => {
-      const catalogVal = (bot.defaultConfig.strategyParams ?? {})[f.key]
-      v[f.key] = catalogVal !== undefined ? catalogVal : f.defaultValue
-    })
-    return v
-  })
-
-  const configGroups = useMemo(() => {
-    const g: Record<string, StrategyFieldDef[]> = {}
-    commonFields.forEach(f => { const k = f.group ?? 'Geral'; (g[k] ||= []).push(f) })
-    return g
-  }, [commonFields])
-
-  const strategyFields = STRATEGY_PARAMS_FIELDS[bot.strategy] ?? []
-
-  const handleConfirm = () => {
-    const cfg = sanitizeNumericValues(cfgVals, commonFields)
-    const prm = sanitizeNumericValues(prmVals, strategyFields)
-
-    onConfirm({
-      symbol: cfg.symbol as string,
-      contractType: cfg.contractType as string,
-      duration: cfg.duration as number,
-      durationUnit: cfg.durationUnit as BotConfig['durationUnit'],
-      initialStake: cfg.initialStake as number,
-      currency: 'USD',
-      maxTrades: cfg.maxTrades as number,
-      maxLoss: cfg.maxLoss as number,
-      maxProfit: cfg.maxProfit as number,
-      strategyParams: prm,
-    })
-    onClose()
-  }
-
-  return (
-    <Portal>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 640 }} />
-      <div style={{ position: 'fixed', inset: '16px 16px auto', top: 16, zIndex: 650, maxWidth: 520, margin: '0 auto' }}>
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-            <div>
-              <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 14 }}>{bot.name}</p>
-              <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>{STRATEGY_LABELS[bot.strategy]}</p>
-            </div>
-            <button onClick={onClose} className="btn-ghost" style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-          </div>
-
-          <div style={{ padding: '16px 20px', maxHeight: '65vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {Object.entries(configGroups).map(([group, fields]) => (
-              <div key={group}>
-                <p style={{ color: 'var(--text-faint)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>{group}</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {fields.map(f => (
-                    <div key={f.key}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <label style={{ color: 'var(--text)', fontSize: 12, fontWeight: 500 }}>{f.label}</label>
-                        {f.type === 'toggle' && <Field f={f} value={cfgVals[f.key]} onChange={v => setCfgVals(p => ({ ...p, [f.key]: v }))} />}
-                      </div>
-                      {f.type !== 'toggle' && <Field f={f} value={cfgVals[f.key]} onChange={v => setCfgVals(p => ({ ...p, [f.key]: v }))} />}
-                      {f.description && <p style={{ color: 'var(--text-faint)', fontSize: 10, marginTop: 4 }}>{f.description}</p>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {strategyFields.length > 0 && (
-              <div>
-                <p style={{ color: 'var(--text-faint)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>Parâmetros da Estratégia</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {strategyFields.map(f => (
-                    <div key={f.key}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <div>
-                          <label style={{ color: 'var(--text)', fontSize: 12, fontWeight: 500 }}>{f.label}</label>
-                          {f.description && <p style={{ color: 'var(--text-faint)', fontSize: 10 }}>{f.description}</p>}
-                        </div>
-                        {f.type === 'toggle' && <Field f={f} value={prmVals[f.key]} onChange={v => setPrmVals(p => ({ ...p, [f.key]: v }))} />}
-                      </div>
-                      {f.type !== 'toggle' && <Field f={f} value={prmVals[f.key]} onChange={v => setPrmVals(p => ({ ...p, [f.key]: v }))} />}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
-            <button onClick={onClose} className="btn-ghost" style={{ padding: '10px 20px', fontSize: 14, fontWeight: 500 }}>Cancelar</button>
-            <button onClick={handleConfirm} className="btn-primary" style={{ flex: 1, padding: '10px 0', fontSize: 14 }}>Confirmar</button>
-          </div>
-        </div>
-      </div>
-    </Portal>
-  )
-}
-
-export function ControlsSection() {
-  const { accounts, currentAccount, setCurrentAccount, localUser } = useAuth()
-  // Para administradores, os nomes das contas ficam mais explícitos:
-  // Demo -> "Virtual", Real -> "Ao Vivo" — independente das labels
-  // globais configuráveis em accLabels (essas continuam a valer
-  // para utilizadores normais, definidas em /api/admin/labels).
-  const isAdmin = localUser?.role === 'admin'
-
-  const {
-    catalogBots, sessionBots, trades, openTrades, wsStatus, isLoadingCatalog,
-    lastError, statusMessage, listCatalogBots, startCatalogBot, stopBot, resumeBot,
-  } = useBots()
-  const loader = useLoader()
-
-  const [accLabels, setAccLabels] = useState({ realLabel: 'REAL', demoLabel: 'DEMO' })
-  useEffect(() => { api.getAccountLabels().then(setAccLabels).catch(() => {}) }, [])
-
-  const demoLabelDisplay = isAdmin ? 'REAL' : accLabels.demoLabel
-  const realLabelDisplay = isAdmin ? 'DEMO' : accLabels.realLabel
-
-  // Cores também invertidas para admin: Virtual fica verde,
-  // Ao Vivo fica azul (para utilizadores normais mantém-se
-  // Demo=azul / Real=verde, como sempre foi).
-  const demoColorDisplay = isAdmin ? 'var(--green)' : 'var(--blue-hi)'
-  const realColorDisplay = isAdmin ? 'var(--blue-hi)' : 'var(--green)'
-
-  // ── Sheets em vidro (substituem os antigos dropdowns) ──
-  const [showAccSheet, setShowAccSheet] = useState(false)
-  const [showBotSheet, setShowBotSheet] = useState(false)
-  const [switchingAcc, setSwitchingAcc] = useState(false)
-  const [switchingBot, setSwitchingBot] = useState(false)
-
-  const [showConfig, setShowConfig] = useState(false)
-  const [selectedBot, setSelectedBot] = useState<CatalogBot | null>(null)
-  const [pendingConfig, setPendingConfig] = useState<Partial<BotConfig> | null>(null)
-
-  const [sessionBotId, setSessionBotId] = useState<string | null>(null)
-  const sessionBotIdRef = useRef<string | null>(null)
-  const setSessionBotIdSync = (id: string | null) => { sessionBotIdRef.current = id; setSessionBotId(id) }
-
-  const startInFlightRef = useRef(false)
-  const [isStarting, setIsStarting] = useState(false)
-
-  useEffect(() => { if (!selectedBot && catalogBots.length > 0) setSelectedBot(catalogBots[0]) }, [catalogBots, selectedBot])
-
-  useEffect(() => {
-    const running = sessionBots.find(b => b.status === 'running' || b.status === 'paused')
-    if (running && !sessionBotIdRef.current) {
-      setSessionBotIdSync(running.id); startInFlightRef.current = false; setIsStarting(false)
-    }
-    if (sessionBotIdRef.current) {
-      const tracked = sessionBots.find(b => b.id === sessionBotIdRef.current)
-      if (tracked && (tracked.status === 'stopped' || tracked.status === 'error')) setSessionBotIdSync(null)
-    }
-  }, [sessionBots])
-
-  const liveBot = sessionBotId ? sessionBots.find(b => b.id === sessionBotId) ?? null : null
-  const isRunning = liveBot?.status === 'running'
-  const isPaused = liveBot?.status === 'paused'
-
-  const openCountForBot = sessionBotId ? Object.values(openTrades).filter(t => t.botId === sessionBotId).length : 0
-  const closedCountForBot = sessionBotId ? trades.filter(t => t.botId === sessionBotId).length : 0
-
-  const [flashClosed, setFlashClosed] = useState(false)
-  const prevClosedCountRef = useRef<number>(0)
-
-  useEffect(() => {
-    const prev = prevClosedCountRef.current
-    prevClosedCountRef.current = closedCountForBot
-    if (closedCountForBot > prev && prev !== 0) {
-      setFlashClosed(true)
-      const t = setTimeout(() => setFlashClosed(false), 1200)
-      return () => clearTimeout(t)
-    }
-  }, [closedCountForBot])
-
-  const progressStep = !isRunning ? -1 : flashClosed ? 2 : openCountForBot > 0 ? 1 : 0
-  const steps = ['Analisando', 'Contrato aberto', 'Contrato fechado']
-  const [animProgress, setAnimProgress] = useState(0)
-
-  useEffect(() => {
-    const target = isRunning && progressStep >= 0 ? ((progressStep + 1) / steps.length) * 100 : 0
-    const id = setInterval(() => setAnimProgress(p => { const d = target - p; return Math.abs(d) < 0.5 ? target : p + d * 0.1 }), 16)
-    return () => clearInterval(id)
-  }, [isRunning, progressStep])
-
-  const { netPnL, totalWins, totalLosses } = useMemo(() => {
-    const active = sessionBots.filter(b => b.stats.totalTrades > 0 || b.status === 'running')
-    return {
-      netPnL: active.reduce((s, b) => s + b.stats.netPnL, 0),
-      totalWins: active.reduce((s, b) => s + b.stats.wins, 0),
-      totalLosses: active.reduce((s, b) => s + b.stats.losses, 0),
-    }
-  }, [sessionBots])
-  void netPnL; void totalWins; void totalLosses
-
-  const handleToggle = () => {
-    if (!selectedBot) return
-    const currentId = sessionBotIdRef.current
-    const currentBot = currentId ? sessionBots.find(b => b.id === currentId) : null
-    if (currentBot?.status === 'running') { stopBot(currentId!); return }
-    if (currentBot?.status === 'paused') { resumeBot(currentId!); return }
-    if (startInFlightRef.current) return
-    startInFlightRef.current = true
-    setIsStarting(true)
-    startCatalogBot(selectedBot.id, undefined, pendingConfig ?? undefined)
-    setTimeout(() => { startInFlightRef.current = false; setIsStarting(false) }, 8000)
-  }
-
-  // ── Selecionar conta via sheet + loader ──
-  const handleAccSelectSheet = async (acc: typeof accounts[number]) => {
-    if (currentAccount?.account_id === acc.account_id) { setShowAccSheet(false); return }
-    setSwitchingAcc(true)
-    const label = acc.is_virtual ? `Conta ${demoLabelDisplay}` : `Conta ${realLabelDisplay}`
-    loader.show(`A ligar a ${label}…`)
-    try {
-      await setCurrentAccount(acc)
-      loader.complete(`${label} activa!`)
-    } catch {
-      loader.hide()
-    } finally {
-      setSwitchingAcc(false)
-      setShowAccSheet(false)
-    }
-  }
-
-  // ── Selecionar estratégia via sheet + loader ──
-  const handleBotSelectSheet = (b: CatalogBot) => {
-    if (selectedBot?.id === b.id) { setShowBotSheet(false); return }
-    setSwitchingBot(true)
-    loader.show('A carregar estratégia…')
-    setTimeout(() => {
-      setSelectedBot(b)
-      setPendingConfig(null)
-      setSessionBotIdSync(null)
-      loader.complete('Estratégia selecionada!')
-      setSwitchingBot(false)
-      setShowBotSheet(false)
-    }, 600)
-  }
-
-  const accLabel = !currentAccount ? 'Selecionar' : currentAccount.is_virtual ? demoLabelDisplay : realLabelDisplay
-  const accColor = !currentAccount ? 'var(--text-faint)' : currentAccount.is_virtual ? demoColorDisplay : realColorDisplay
-
-  return (
-    <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          <div>
-            <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
-            <button onClick={() => setShowAccSheet(true)} className="btn-ghost" style={{
-              width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: accColor }}>{accLabel}</span>
-            </button>
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500 }}>Estratégia</p>
-              <button onClick={listCatalogBots} title="Recarregar" style={{ color: 'var(--text-faint)' }}>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  style={isLoadingCatalog ? { animation: 'spin 1s linear infinite' } : undefined}>
-                  <path d="M1 4v5h5" /><path d="M15 12V7h-5" />
-                  <path d="M13.51 5.87a6 6 0 0 0-10.16 2.14" /><path d="M2.49 10.13a6 6 0 0 0 10.16-2.14" />
-                </svg>
-              </button>
-            </div>
-            <button onClick={() => setShowBotSheet(true)} className="btn-ghost" style={{
-              width: '100%', padding: '12px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
-            }}>
-              {selectedBot ? (
-                <span style={{ color: 'var(--white)', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedBot.name}</span>
-              ) : (
-                <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Selecionar'}</span>
-              )}
-            </button>
-          </div>
+        {/* Ícone + estado */}
+        <div style={{
+          width: 34, height: 34, borderRadius: 8,
+          background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--text-dim)', flexShrink: 0,
+        }}>
+          <IconBar />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={() => selectedBot && setShowConfig(true)} disabled={!selectedBot} title="Configurar parâmetros"
-            className="btn-ghost" style={{
-              width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              opacity: !selectedBot ? 0.4 : 1, cursor: !selectedBot ? 'not-allowed' : 'pointer',
-              borderColor: pendingConfig ? 'var(--blue)' : undefined,
-            }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={pendingConfig ? 'var(--blue-hi)' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+        {/* Label central */}
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <span style={{ color: 'var(--white)', fontSize: 15, fontWeight: 700 }}>
+            Last Digits:{' '}
+            <span style={{ color: lastD !== null ? COLOR_HOT : 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              {lastD !== null ? lastD : '—'}
+            </span>
+          </span>
+        </div>
 
-          <button onClick={handleToggle} disabled={!selectedBot || wsStatus !== 'connected' || isStarting}
-            title={isStarting ? 'A iniciar…' : undefined}
-            style={{
-              width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              border: `2px solid ${!selectedBot || wsStatus !== 'connected' || isStarting ? 'var(--border)' : isRunning ? 'var(--red)' : isPaused ? '#f5a623' : 'var(--green)'}`,
-              background: !selectedBot || wsStatus !== 'connected' || isStarting ? 'transparent' : isRunning ? 'rgba(233,32,63,0.1)' : isPaused ? 'rgba(245,166,35,0.1)' : 'rgba(24,201,122,0.1)',
-              opacity: !selectedBot || wsStatus !== 'connected' || isStarting ? 0.4 : 1,
-              cursor: !selectedBot || wsStatus !== 'connected' || isStarting ? 'not-allowed' : 'pointer',
+        {/* Contagem + selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 600 }}>
+            {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
+          </span>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setWinOpen(o => !o)} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 28, height: 28, borderRadius: 7,
+              background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
+              cursor: 'pointer', color: 'var(--text-dim)',
             }}>
-            {isStarting ? (
-              <span style={{ width: 16, height: 16, border: '2px solid var(--text-dim)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-            ) : isRunning ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red-hi)" strokeWidth="3" strokeLinecap="round">
-                <line x1="8" y1="5" x2="8" y2="19" /><line x1="16" y1="5" x2="16" y2="19" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={isPaused ? '#f5a623' : 'var(--green)'}><path d="M6 4l14 8-14 8V4z" /></svg>
+              <IconChevron up={winOpen} />
+            </button>
+            {winOpen && (
+              <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 70, padding: 4, minWidth: 100 }}>
+                {WINDOWS.map(w => (
+                  <button key={w} onClick={() => { setWin(w); setWinOpen(false) }}
+                    style={{
+                      width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8,
+                      fontSize: 13, background: 'transparent',
+                      color: win === w ? 'var(--blue-hi)' : 'var(--text)',
+                      fontWeight: win === w ? 700 : 400,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--border)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    {w}
+                  </button>
+                ))}
+              </div>
             )}
-          </button>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              {steps.map((s, i) => (
-                <span key={s} style={{ fontSize: 11, fontWeight: 500, color: i <= progressStep ? 'var(--white)' : 'var(--text-faint)' }}>{s}</span>
-              ))}
-            </div>
-            <div style={{ position: 'relative', height: 4, background: 'var(--border)', borderRadius: 4 }}>
-              <div style={{ position: 'absolute', height: '100%', background: 'var(--blue)', borderRadius: 4, width: `${animProgress}%`, transition: 'width 0.5s' }} />
-              {steps.map((_, i) => (
-                <div key={i} style={{
-                  position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, borderRadius: '50%',
-                  border: `2px solid ${i <= progressStep ? 'var(--blue)' : 'var(--border-hi)'}`,
-                  background: i <= progressStep ? 'white' : 'var(--bg-card-hi)',
-                  left: `calc(${(i / (steps.length - 1)) * 100}% - 6px)`,
-                }} />
-              ))}
-            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Sheet em vidro: Selecionar Tipo de Conta (via Portal) ── */}
-      {showAccSheet && (
-        <Portal>
-          <div className="glass-overlay" onClick={() => !switchingAcc && setShowAccSheet(false)}>
-            <div className="glass-sheet" onClick={e => e.stopPropagation()}>
-              <div className="glass-sheet-header">
-                <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Tipo de Conta</p>
-                {!switchingAcc && (
-                  <button onClick={() => setShowAccSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
-                )}
-              </div>
-              {switchingAcc ? (
-                <div className="glass-sheet-loader">
-                  <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                  <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A ligar à conta…</span>
-                </div>
-              ) : (
-                <div className="glass-sheet-body">
-                  {accounts.map(a => (
-                    <button key={a.account_id}
-                      className={`glass-option ${currentAccount?.account_id === a.account_id ? 'active' : ''}`}
-                      onClick={() => handleAccSelectSheet(a)}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? demoColorDisplay : realColorDisplay }}>
-                        {a.is_virtual ? `Conta ${demoLabelDisplay}` : `Conta ${realLabelDisplay}`}
-                      </p>
-                      <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Saldo: ${Number(a.balance ?? 0).toFixed(2)}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </Portal>
-      )}
+      {/* ── Gráfico de barras ─────────────────────────────── */}
+      <div className="chart-bars-wrap" style={{ padding: '8px 14px 4px', display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+        {bars.map((pct, digit) => {
+          const color = getBarColor(pct)
+          const ratio = pct / (maxBar + 2)
 
-      {/* ── Sheet em vidro: Selecionar Estratégia (via Portal) ── */}
-      {showBotSheet && (
-        <Portal>
-          <div className="glass-overlay" onClick={() => !switchingBot && setShowBotSheet(false)}>
-            <div className="glass-sheet" onClick={e => e.stopPropagation()}>
-              <div className="glass-sheet-header">
-                <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Estratégia</p>
-                {!switchingBot && (
-                  <button onClick={() => setShowBotSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
-                )}
-              </div>
-              {switchingBot ? (
-                <div className="glass-sheet-loader">
-                  <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                  <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A carregar estratégia…</span>
-                </div>
-              ) : catalogBots.length === 0 ? (
-                <div className="glass-sheet-loader">
-                  <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Nenhuma estratégia disponível'}</span>
-                </div>
-              ) : (
-                <div className="glass-sheet-body">
-                  {catalogBots.map(b => (
-                    <button key={b.id}
-                      className={`glass-option ${selectedBot?.id === b.id ? 'active' : ''}`}
-                      onClick={() => handleBotSelectSheet(b)}>
-                      <p style={{ fontSize: 14, color: 'var(--white)', fontWeight: 700 }}>{b.name}</p>
-                      <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{STRATEGY_LABELS[b.strategy]}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </Portal>
-      )}
+          return (
+            <div key={digit} style={{
+              flex: 1, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%',
+            }}>
+              {/* Percentagem — topo da barra */}
+              <span className="tabular" style={{
+                fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                color: 'var(--text-dim)', lineHeight: 1, minHeight: 14,
+              }}>
+                {pct.toFixed(1)}%
+              </span>
 
-      {showConfig && selectedBot && (
-        <ConfigModal bot={selectedBot} onClose={() => setShowConfig(false)} onConfirm={setPendingConfig} />
-      )}
-    </>
+              {/* Barra — flat, sem sombra. Altura via CSS var, ajustável por breakpoint */}
+              <div style={{
+                width: '100%',
+                height: `max(4px, calc(var(--chart-bar-max) * ${ratio.toFixed(4)}))`,
+                background: color,
+                borderRadius: '4px 4px 2px 2px',
+                flexShrink: 0,
+              }} />
+
+              {/* Dígito */}
+              <span className="tabular" style={{
+                fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                color: 'var(--text-dim)', lineHeight: 1,
+              }}>
+                {digit}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+    </div>
   )
 }
