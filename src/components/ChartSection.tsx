@@ -1,7 +1,7 @@
 // ============================================================
 // NEXORA FOREX — ChartSection  v4
 // Design: igual à imagem de referência
-//   - Barras neutras: cinza claro (#b8bcc8)
+//   - Barras neutras: cinza azulado (paleta Bertoni)
 //   - Barra hot (máx): verde sólido (#2e7d32)
 //   - Barras cold (mín): vermelho sólido (#c62828)
 //   - Sem gradientes, sem glow, sem neon — flat e limpo
@@ -21,7 +21,7 @@ const RECONNECT_MS = 2_500
 // Cores exactas da imagem de referência
 const COLOR_HOT     = '#2e7d32'   // verde sólido — barra dominante
 const COLOR_COLD    = '#c62828'   // vermelho sólido — barras mais fracas
-const COLOR_NEUTRAL = '#b8bcc8'   // cinza claro — barras neutras
+const COLOR_NEUTRAL = '#8f99c4'   // cinza azulado — barras neutras (paleta Bertoni)
 
 const SYMBOLS = [
   { value: '1HZ100V', label: 'Vol 100 (1s)' },
