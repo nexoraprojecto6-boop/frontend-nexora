@@ -6,13 +6,13 @@
    ============================================================ */
 
 :root {
-  /* Base — inspirada em --color6 (#001428) e --color2 (#0a07a6) do Bertoni */
-  --bg:            #001428;
-  --bg-elevated:   #041b33;
-  --bg-card:       #051f3d;
-  --bg-card-hi:    #0a2847;
-  --border:        #13324f;
-  --border-hi:     #1c4468;
+  /* Base — fundo totalmente escuro (quase preto) */
+  --bg:            #060708;
+  --bg-elevated:   #0b0d10;
+  --bg-card:       #0e1013;
+  --bg-card-hi:    #14171b;
+  --border:        #1f2226;
+  --border-hi:     #2a2e34;
 
   /* Azul-roxo — acção primária, links, foco (inspirado em --color3/--color4 do Bertoni) */
   --blue:          #5862BF;
@@ -73,8 +73,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 15% -10%, rgba(118, 131, 255, 0.18) 0%, transparent 45%),
-    radial-gradient(circle at 100% 10%, rgba(233, 32, 63, 0.08) 0%, transparent 40%);
+    radial-gradient(circle at 15% -10%, rgba(118, 131, 255, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 100% 10%, rgba(233, 32, 63, 0.04) 0%, transparent 40%);
 }
 
 #root {
