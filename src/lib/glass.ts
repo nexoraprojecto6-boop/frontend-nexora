@@ -2,12 +2,10 @@
 // NEXORA FOREX — Estilos "glass" reutilizáveis
 // ============================================================
 import type { CSSProperties } from 'react'
-
 export const SUPPORT_WHATSAPP_NUMBER = '244976289984'
 export const SUPPORT_WHATSAPP_URL = (msg: string) =>
   `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`
-
-// Card em vidro fosco padrão (azul, tom da app)
+// Card em vidro fosco padrão (azul-marinho + azul-roxo, tom da app — paleta Bertoni)
 export const glassCard: CSSProperties = {
   position: 'relative',
   width: '100%',
@@ -16,11 +14,10 @@ export const glassCard: CSSProperties = {
   borderRadius: 20,
   border: '1px solid var(--border)',
   boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-  background: 'rgba(16,25,46,0.7)',
+  background: 'rgba(5,31,61,0.7)',
   backdropFilter: 'blur(20px) saturate(140%)',
   WebkitBackdropFilter: 'blur(20px) saturate(140%)',
 }
-
 // Card "vidro puro tipo sangue" — vermelho, sem neon, para o ecrã de
 // conexão com a Deriv. Saturado mas fosco, sem glow.
 export const glassCardBlood: CSSProperties = {
@@ -35,14 +32,12 @@ export const glassCardBlood: CSSProperties = {
   backdropFilter: 'blur(22px) saturate(160%)',
   WebkitBackdropFilter: 'blur(22px) saturate(160%)',
 }
-
 // Reflexo estilo "água" por baixo de um cartão — efeito espelho a
 // desvanecer, sem brilho/neon. Aplicar num wrapper com position:relative
 // que envolve o cartão, usando este objeto no ::after via classe utilitária
 // (ver .glass-reflect no CSS global) — aqui devolvemos o estilo inline
 // equivalente para quando não se pode adicionar classes globais.
 export const reflectWrapperClass = 'glass-reflect'
-
 // CSS global a adicionar UMA VEZ em styles/index.css (ver instruções)
 export const GLASS_REFLECT_CSS = `
 .glass-reflect { position: relative; }
@@ -63,7 +58,6 @@ export const GLASS_REFLECT_CSS = `
   pointer-events: none;
 }
 `
-
 // Botão vermelho puro, fosco, sem neon — usado para "Conectar à Deriv"
 export const bloodButton: CSSProperties = {
   width: '100%',
@@ -80,7 +74,6 @@ export const bloodButton: CSSProperties = {
   cursor: 'pointer',
   transition: 'filter 0.15s ease, transform 0.15s ease',
 }
-
 export const inputStyle: CSSProperties = {
   width: '100%',
   padding: '12px 14px',
@@ -91,7 +84,6 @@ export const inputStyle: CSSProperties = {
   fontSize: 14,
   outline: 'none',
 }
-
 export const labelStyle: CSSProperties = {
   display: 'block',
   color: 'var(--text-faint)',
@@ -100,7 +92,6 @@ export const labelStyle: CSSProperties = {
   fontWeight: 600,
   letterSpacing: 0.3,
 }
-
 export const errorTextStyle: CSSProperties = {
   color: '#ff6b7a',
   fontSize: 12.5,
