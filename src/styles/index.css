@@ -228,25 +228,26 @@ a {
 
 .glass-banner {
   position: fixed;
-  top: 10px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   z-index: 500;
   width: min(92vw, 420px);
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(88,98,191,0.45), rgba(5,31,61,0.4));
+  background: linear-gradient(135deg, rgba(88,98,191,0.45), rgba(6,7,8,0.5));
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   border: 1px solid rgba(255,255,255,0.08);
-  animation: glass-drop 0.35s cubic-bezier(.22,1,.36,1);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.1);
+  animation: glass-drop 0.3s cubic-bezier(.22,1,.36,1);
 }
 @keyframes glass-drop {
-  from { opacity: 0; transform: translate(-50%, -14px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 .glass-banner-close {
   color: var(--text-faint);
