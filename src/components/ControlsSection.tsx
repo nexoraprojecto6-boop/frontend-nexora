@@ -17,6 +17,32 @@ function Portal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body)
 }
 
+// ── Ícones inline (sem emoji) ───────────────────────────────
+// Setas cruzadas — indica "trocar/mudar de conta"
+function IconSwitch() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="17 1 21 5 17 9" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  )
+}
+// Lista — indica "lista de estratégias/bots"
+function IconList() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  )
+}
+
 // ── Input numérico controlado por texto local ──────────────────
 function NumberField({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; onChange: (v: unknown) => void }) {
   const toText = (v: unknown) => (v === undefined || v === null || Number.isNaN(v as number) ? '' : String(v))
@@ -361,9 +387,12 @@ export function ControlsSection() {
           <div>
             <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
             <button onClick={() => setShowAccSheet(true)} className="btn-ghost" style={{
-              width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              width: '100%', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
             }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: accColor }}>{accLabel}</span>
+              <span style={{ display: 'flex', color: 'var(--text-faint)', flexShrink: 0 }}>
+                <IconSwitch />
+              </span>
             </button>
           </div>
 
@@ -379,13 +408,16 @@ export function ControlsSection() {
               </button>
             </div>
             <button onClick={() => setShowBotSheet(true)} className="btn-ghost" style={{
-              width: '100%', padding: '12px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+              width: '100%', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0,
             }}>
               {selectedBot ? (
                 <span style={{ color: 'var(--white)', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedBot.name}</span>
               ) : (
                 <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Selecionar'}</span>
               )}
+              <span style={{ display: 'flex', color: 'var(--text-faint)', flexShrink: 0 }}>
+                <IconList />
+              </span>
             </button>
           </div>
         </div>
