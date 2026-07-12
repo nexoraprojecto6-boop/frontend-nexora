@@ -87,7 +87,7 @@ export default function NotificationCenterFloating({ notifications, onMarkAllRea
             style={{
               position: 'relative', width: '100%', maxWidth: 420, maxHeight: '70vh',
               display: 'flex', flexDirection: 'column',
-              borderRadius: 22,
+              borderRadius: 0,
               border: '1px solid rgba(255,255,255,0.12)',
               background: 'rgba(14,16,19,0.72)',
               backdropFilter: 'blur(28px) saturate(180%)',
