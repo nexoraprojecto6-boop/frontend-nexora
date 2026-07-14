@@ -31,10 +31,23 @@ function IconBell() {
 
 // Formata o dígito do tick final (0-9) — não é um preço, é o
 // último algarismo da cotação no momento em que a operação terminou.
-function formatTickDigit(v: unknown): string {
-  if (typeof v !== 'number' || Number.isNaN(v)) return '—'
-  const digit = Math.trunc(Math.abs(v)) % 10
-  return String(digit)
+//
+// Prioridade: t.exitDigit, já calculado no BACKEND (a estratégia sabe
+// o nº de casas decimais correcto do símbolo). Só recorre ao cálculo
+// local a partir de exitTick como fallback de compatibilidade, caso
+// o bot ainda não envie exitDigit (versões antigas / outras
+// estratégias) — e mesmo assim avisa que pode ser impreciso.
+function formatTickDigit(exitDigit: unknown, exitTick: unknown): string {
+  if (typeof exitDigit === 'number' && !Number.isNaN(exitDigit)) {
+    return String(exitDigit)
+  }
+  // Fallback: aproximação a partir do preço bruto (pode estar errado
+  // se o preço tiver zeros à direita cortados pelo toString/JSON).
+  if (typeof exitTick === 'number' && !Number.isNaN(exitTick)) {
+    const digit = Math.trunc(Math.abs(exitTick) * 100) % 10
+    return String(digit)
+  }
+  return '—'
 }
 
 export function TradesTable() {
@@ -110,7 +123,7 @@ export function TradesTable() {
                     <td style={{ padding: '10px 6px', color: 'var(--text-dim)', wordBreak: 'break-word' }}>{t.hora}</td>
                     <td style={{ padding: '10px 6px', color: 'var(--text-dim)', wordBreak: 'break-word' }}>{t.contractType ?? '—'}</td>
                     <td style={{ padding: '10px 6px', textAlign: 'right', color: 'var(--text-dim)', wordBreak: 'break-word', fontWeight: 700 }}>
-                      {formatTickDigit(t.exitTick)}
+                      {formatTickDigit(t.exitDigit, t.exitTick)}
                     </td>
                     <td style={{ padding: '10px 6px', textAlign: 'right', color: 'var(--text-faint)', wordBreak: 'break-word' }}>{t.stake.toFixed(2)}</td>
                     <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? 'var(--green)' : 'var(--red-hi)', wordBreak: 'break-word' }}>
