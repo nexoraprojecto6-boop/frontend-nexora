@@ -54,6 +54,51 @@ export interface AdminStats {
   inactiveAfterDays: number
 }
 
+// ── Relatório de comissão (Deriv markup-statistics) ─────────
+export interface MarkupStatisticsBreakdown {
+  app_id: string
+  app_markup_usd: number
+  volume_usd: number
+  payout_usd: number
+  contract_count: number
+  client_count: number
+}
+
+export interface MarkupCommissionSplit {
+  kelvin: number
+  platform: number
+  kelvin_pct: number
+  platform_pct: number
+}
+
+export interface MarkupStatisticsData {
+  total_app_markup_usd: number
+  total_volume_usd: number
+  total_payout_usd: number
+  total_contract_count: number
+  total_client_count: number
+  breakdown: MarkupStatisticsBreakdown[]
+  date_from: string
+  date_to: string
+  commission_split: MarkupCommissionSplit
+}
+
+export interface MarkupStatisticsParams {
+  month?: number   // 1-12
+  year?: number
+  dateFrom?: string // YYYY-MM-DD — usado só se month/year não forem passados
+  dateTo?: string
+}
+
+// Erro dedicado — permite ao AdminPage mostrar uma instrução clara
+// ("gera um novo token") em vez de um erro genérico.
+export class DerivTokenExpiredError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'DerivTokenExpiredError'
+  }
+}
+
 export interface RegisterPayload {
   fullName: string
   whatsapp: string
@@ -224,6 +269,41 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     })
+  },
+
+  // ── Admin: relatório de comissão (Deriv markup-statistics) ─
+  // Aceita { month, year } OU { dateFrom, dateTo }. Se ambos forem
+  // dados, month/year tem prioridade (é o que o backend também faz).
+  //
+  // Chamada dedicada (não usa fetchWithLocalAuth) para preservar o
+  // código de erro DERIV_TOKEN_EXPIRED sem ele ser "engolido" pela
+  // mensagem genérica de erro.
+  async getMarkupStatistics(params: MarkupStatisticsParams): Promise<MarkupStatisticsData> {
+    const qs = new URLSearchParams()
+    if (params.month && params.year) {
+      qs.set('month', String(params.month))
+      qs.set('year', String(params.year))
+    } else if (params.dateFrom && params.dateTo) {
+      qs.set('date_from', params.dateFrom)
+      qs.set('date_to', params.dateTo)
+    }
+
+    const token = getLocalToken()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers['x-local-authorization'] = `Bearer ${token}`
+
+    const res = await fetch(`${API_BASE_URL}/api/admin/markup-statistics?${qs.toString()}`, { headers })
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      if (data?.error === 'DERIV_TOKEN_EXPIRED') {
+        throw new DerivTokenExpiredError(
+          data.message || 'O token da Deriv para o relatório de comissão expirou ou é inválido.',
+        )
+      }
+      throw new Error(data?.message || data?.error || `HTTP ${res.status}`)
+    }
+    return data
   },
 
   // ── Contas / trading (inalterado) ─────────────────────────
