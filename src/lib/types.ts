@@ -83,6 +83,7 @@ export interface TradeClosedPayload {
   stake: number
   entryTick?: number
   exitTick?: number
+  exitDigit?: number
   contractType?: string
 }
 
