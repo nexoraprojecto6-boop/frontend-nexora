@@ -27,6 +27,7 @@ export interface TradeRecord {
   direction?: string
   contractType?: string
   exitTick?: number
+  exitDigit?: number
 }
 
 interface BotsCtx {
@@ -166,11 +167,15 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       case 'bot:trade_closed': {
         const p = payload as unknown as TradeClosedPayload; if (!p?.contractId) break
         const { name, strategy } = getBotMeta(botId)
-        const rec: TradeRecord = { id: p.contractId, hora: new Date().toLocaleTimeString('pt-PT'), botId, botName: name, strategy, stake: p.stake, profit: p.profit, won: p.won, timestamp: Date.now(), pending: false, contractType: p.contractType, exitTick: p.exitTick }
+        const rec: TradeRecord = {
+          id: p.contractId, hora: new Date().toLocaleTimeString('pt-PT'), botId, botName: name, strategy,
+          stake: p.stake, profit: p.profit, won: p.won, timestamp: Date.now(), pending: false,
+          contractType: p.contractType, exitTick: p.exitTick, exitDigit: p.exitDigit,
+        }
         setOpenTrades(prev => { const n = { ...prev }; delete n[p.contractId]; return n })
         setTrades(prev => [rec, ...prev].slice(0, MAX_TRADES))
         setBotTrades(prev => ({ ...prev, [botId]: [rec, ...(prev[botId] ?? [])].slice(0, MAX_TRADES) }))
-        const t: Trade = { id: rec.id, hora: rec.hora, tipo: rec.contractType ?? strategy, tickFinal: rec.exitTick ?? 0, preco: `$${rec.stake.toFixed(2)}`, resultado: rec.profit }
+        const t: Trade = { id: rec.id, hora: rec.hora, tipo: rec.contractType ?? strategy, tickFinal: rec.exitDigit ?? rec.exitTick ?? 0, preco: `$${rec.stake.toFixed(2)}`, resultado: rec.profit }
         trading._addTrade(t)
 
         // 🔊 Som de "gain" — só quando o trade fecha com ganho (won).
