@@ -104,9 +104,9 @@ function DashboardInner() {
         @media (max-width: 1023px) {
           .dash-main {
             flex-direction: column !important;
-            gap: 8px;
-            padding: 8px 10px;
-            overflow-y: auto !important; /* rede de segurança: só entra em acção se algo não couber */
+            gap: 6px;
+            padding: 6px 8px;
+            overflow-y: auto; /* rede de segurança — só entra em ação se, mesmo compacto, algo não couber */
           }
           .dash-left-col {
             display: contents !important;
@@ -121,10 +121,13 @@ function DashboardInner() {
             width: 100% !important;
             border-left: none !important;
             border-top: 1px solid var(--border) !important;
-            flex: 1 1 220px !important;
-            min-height: 180px !important;
+            flex: 1 1 auto !important;
+            min-height: 320px !important;
             max-height: none !important;
           }
+        }
+        @media (max-width: 1023px) and (max-height: 720px) {
+          .dash-trades { min-height: 260px !important; }
         }
         @media (max-width: 480px) {
           .dash-trades { min-height: 150px !important; }
