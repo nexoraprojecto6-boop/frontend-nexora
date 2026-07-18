@@ -386,46 +386,46 @@ export function ControlsSection() {
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          <div>
-            <p style={{ color: '#e5e5ea', fontSize: 15, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'clamp(6px, 2vw, 10px)' }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ color: '#e5e5ea', fontSize: 'clamp(11px, 3vw, 15px)', marginBottom: 6, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Tipo de Conta</p>
             <button onClick={() => setShowAccSheet(true)} className="btn-ghost" style={{
-              width: '100%', height: 56, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+              width: '100%', height: 'clamp(44px, 11vw, 56px)', padding: '0 clamp(6px, 2vw, 12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0,
             }}>
-              <span style={{ fontSize: 19, fontWeight: 700, color: accColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{accLabel}</span>
+              <span style={{ fontSize: 'clamp(13px, 3.8vw, 19px)', fontWeight: 700, color: accColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{accLabel}</span>
               <span style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
+                width: 'clamp(22px, 6vw, 30px)', height: 'clamp(22px, 6vw, 30px)', borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
               }}>
                 <IconRefresh />
               </span>
             </button>
           </div>
 
-          <div>
-            <p style={{ color: '#e5e5ea', fontSize: 15, marginBottom: 8, fontWeight: 500 }}>Estratégia</p>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ color: '#e5e5ea', fontSize: 'clamp(11px, 3vw, 15px)', marginBottom: 6, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Estratégia</p>
             <button onClick={() => setShowBotSheet(true)} className="btn-ghost" style={{
-              width: '100%', height: 56, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0,
+              width: '100%', height: 'clamp(44px, 11vw, 56px)', padding: '0 clamp(6px, 2vw, 12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0,
             }}>
               {selectedBot ? (
-                <span style={{ color: 'var(--white)', fontWeight: 700, fontSize: 19, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedBot.name}</span>
+                <span style={{ color: 'var(--white)', fontWeight: 700, fontSize: 'clamp(13px, 3.8vw, 19px)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{selectedBot.name}</span>
               ) : (
-                <span style={{ color: 'var(--text-faint)', fontSize: 15 }}>{isLoadingCatalog ? 'A carregar…' : 'Selecionar'}</span>
+                <span style={{ color: 'var(--text-faint)', fontSize: 'clamp(11px, 3vw, 15px)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{isLoadingCatalog ? 'A carregar…' : 'Selecionar'}</span>
               )}
               <span style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
+                width: 'clamp(22px, 6vw, 30px)', height: 'clamp(22px, 6vw, 30px)', borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
               }}>
                 <IconRefresh />
               </span>
             </button>
           </div>
 
-          <div>
-            <p style={{ color: '#e5e5ea', fontSize: 15, marginBottom: 8, fontWeight: 500 }}>Vídeo Aula</p>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ color: '#e5e5ea', fontSize: 'clamp(11px, 3vw, 15px)', marginBottom: 6, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Vídeo Aula</p>
             <button onClick={() => navigate('/video-lessons')} style={{
-              width: '100%', height: 56, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              width: '100%', height: 'clamp(44px, 11vw, 56px)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(5px, 2vw, 10px)',
               background: 'linear-gradient(180deg, #ef4a5c, #dc2f43)', color: '#fff',
             }}>
               <IconPlayFilled />
@@ -434,7 +434,7 @@ export function ControlsSection() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 3vw, 16px)' }}>
           <button onClick={() => selectedBot && setShowConfig(true)} disabled={!selectedBot} title="Configurar parâmetros"
             className="btn-ghost config-gear-btn" style={{
               width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -450,7 +450,7 @@ export function ControlsSection() {
           <button onClick={handleToggle} disabled={!selectedBot || wsStatus !== 'connected' || isStarting}
             title={isStarting ? 'A iniciar…' : undefined}
             style={{
-              width: 56, height: 56, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              width: 'clamp(44px, 12vw, 56px)', height: 'clamp(44px, 12vw, 56px)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               border: `2.5px solid ${!selectedBot || wsStatus !== 'connected' || isStarting ? 'var(--border)' : isRunning ? 'var(--red-hi)' : isPaused ? '#f5a623' : 'var(--green)'}`,
               background: 'transparent',
               opacity: !selectedBot || wsStatus !== 'connected' || isStarting ? 0.4 : 1,
@@ -468,9 +468,9 @@ export function ControlsSection() {
           </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, gap: 4 }}>
               {steps.map((s, i) => (
-                <span key={s} style={{ fontSize: 14, fontWeight: 500, color: i <= progressStep ? 'var(--white)' : 'var(--text-faint)' }}>{s}</span>
+                <span key={s} style={{ fontSize: 'clamp(9px, 2.6vw, 14px)', fontWeight: 500, color: i <= progressStep ? 'var(--white)' : 'var(--text-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s}</span>
               ))}
             </div>
             <div style={{ position: 'relative', height: 4, background: 'var(--border)', borderRadius: 4 }}>
