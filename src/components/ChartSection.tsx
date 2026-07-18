@@ -252,32 +252,33 @@ export function ChartSection() {
 
       {/* ── Header ─────────────────────────────────────────── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 14px', borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1.5vw, 10px)',
+        padding: 'clamp(8px, 2vw, 10px) clamp(8px, 3vw, 14px)', borderBottom: '1px solid var(--border)',
+        overflow: 'hidden',
       }}>
         {/* Ícone + estado */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <div style={{
-            width: 34, height: 34, borderRadius: 8,
+            width: 'clamp(26px, 7vw, 34px)', height: 'clamp(26px, 7vw, 34px)', borderRadius: 8,
             background: '#ffffff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#1a1a1a',
+            color: '#1a1a1a', flexShrink: 0,
           }}>
             <IconBar />
           </div>
           <div style={{
-            width: 34, height: 34, borderRadius: 8,
+            width: 'clamp(26px, 7vw, 34px)', height: 'clamp(26px, 7vw, 34px)', borderRadius: 8,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text-dim)',
+            color: 'var(--text-dim)', flexShrink: 0,
           }}>
             <IconLandscape />
           </div>
         </div>
 
         {/* Label central */}
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <span style={{ color: 'var(--white)', fontSize: 17, fontWeight: 500 }}>
-            Last Digits:{' '}
+        <div style={{ flex: 1, textAlign: 'center', minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ fontSize: 'clamp(12px, 3.6vw, 17px)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+            <span style={{ color: 'var(--white)' }}>Last Digits: </span>
             <span style={{ color: lastD !== null ? COLOR_HOT : 'var(--text-dim)' }}>
               {lastD !== null ? lastD : '—'}
             </span>
@@ -285,14 +286,14 @@ export function ChartSection() {
         </div>
 
         {/* Contagem + selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, fontWeight: 400 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 'clamp(11px, 3.2vw, 16px)', fontWeight: 400, whiteSpace: 'nowrap' }}>
             {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
           </span>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
             <button onClick={() => setWinOpen(o => !o)} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28,
+              width: 24, height: 24,
               background: 'transparent', border: 'none',
               cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
             }}>
@@ -320,20 +321,20 @@ export function ChartSection() {
       </div>
 
       {/* ── Gráfico de barras ─────────────────────────────── */}
-      <div className="chart-bars-wrap" style={{ padding: '8px 14px 4px', display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+      <div className="chart-bars-wrap" style={{ padding: 'clamp(6px, 2vw, 8px) clamp(6px, 3vw, 14px) 4px', display: 'flex', alignItems: 'flex-end', gap: 'clamp(2px, 1.2vw, 6px)', overflow: 'hidden' }}>
         {bars.map((pct, digit) => {
           const color = getBarColor(pct)
           const ratio = pct / (maxBar + 2)
 
           return (
             <div key={digit} style={{
-              flex: 1, display: 'flex', flexDirection: 'column',
+              flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%',
             }}>
               {/* Percentagem — topo da barra */}
               <span className="tabular" style={{
-                fontSize: 12, fontWeight: 500,
-                color: 'rgba(255,255,255,0.92)', lineHeight: 1, minHeight: 14,
+                fontSize: 'clamp(8.5px, 2.6vw, 12px)', fontWeight: 500,
+                color: 'rgba(255,255,255,0.92)', lineHeight: 1, minHeight: 14, whiteSpace: 'nowrap',
               }}>
                 {pct.toFixed(1)}%
               </span>
@@ -349,7 +350,7 @@ export function ChartSection() {
 
               {/* Dígito */}
               <span className="tabular" style={{
-                fontSize: 15, fontWeight: 700,
+                fontSize: 'clamp(10px, 3vw, 15px)', fontWeight: 700,
                 color: 'var(--white)', lineHeight: 1,
               }}>
                 {digit}
