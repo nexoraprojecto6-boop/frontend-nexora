@@ -210,10 +210,10 @@ a {
   height: var(--chart-h);
 }
 @media (max-width: 1023px) {
-  .chart-bars-wrap { --chart-h: 170px; --chart-bar-max: 125px; }
+  .chart-bars-wrap { --chart-h: 150px; --chart-bar-max: 108px; }
 }
 @media (max-width: 480px) {
-  .chart-bars-wrap { --chart-h: 145px; --chart-bar-max: 100px; }
+  .chart-bars-wrap { --chart-h: 118px; --chart-bar-max: 80px; }
 }
 
 @media (max-width: 1023px) {
