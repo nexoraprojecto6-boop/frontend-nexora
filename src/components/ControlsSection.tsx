@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { useBots } from '../context/BotsContext'
@@ -18,27 +19,29 @@ function Portal({ children }: { children: React.ReactNode }) {
 }
 
 // ── Ícones inline (sem emoji) ───────────────────────────────
-// Setas cruzadas — indica "trocar/mudar de conta"
-function IconSwitch() {
+// Refrescar/trocar — usado nos botões de Conta e Estratégia (igual à imagem)
+function IconRefresh() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="17 1 21 5 17 9" />
-      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-      <polyline points="7 23 3 19 7 15" />
-      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" /><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </svg>
   )
 }
-// Lista — indica "lista de estratégias/bots"
-function IconList() {
+// Play preenchido — botão Vídeo Aula
+function IconPlayFilled() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <line x1="3" y1="6" x2="3.01" y2="6" />
-      <line x1="3" y1="12" x2="3.01" y2="12" />
-      <line x1="3" y1="18" x2="3.01" y2="18" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 4l14 8-14 8V4z" />
+    </svg>
+  )
+}
+// "i" de informação — botão Vídeo Aula
+function IconInfoCircle() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="11" /><line x1="12" y1="8" x2="12.01" y2="8" />
     </svg>
   )
 }
@@ -237,6 +240,7 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
 }
 
 export function ControlsSection() {
+  const navigate = useNavigate()
   const { accounts, currentAccount, setCurrentAccount, localUser } = useAuth()
   // Para administradores, os nomes das contas ficam mais explícitos:
   // Demo -> "Virtual", Real -> "Ao Vivo" — independente das labels
@@ -383,48 +387,56 @@ export function ControlsSection() {
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+        <div className="controls-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           <div>
-            <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
+            <p style={{ color: '#e5e5ea', fontSize: 15, marginBottom: 8, fontWeight: 500 }}>Tipo de Conta</p>
             <button onClick={() => setShowAccSheet(true)} className="btn-ghost" style={{
-              width: '100%', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+              width: '100%', height: 56, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
             }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: accColor }}>{accLabel}</span>
-              <span style={{ display: 'flex', color: 'var(--text-faint)', flexShrink: 0 }}>
-                <IconSwitch />
+              <span style={{ fontSize: 19, fontWeight: 700, color: accColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{accLabel}</span>
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
+              }}>
+                <IconRefresh />
               </span>
             </button>
           </div>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500 }}>Estratégia</p>
-              <button onClick={listCatalogBots} title="Recarregar" style={{ color: 'var(--text-faint)' }}>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  style={isLoadingCatalog ? { animation: 'spin 1s linear infinite' } : undefined}>
-                  <path d="M1 4v5h5" /><path d="M15 12V7h-5" />
-                  <path d="M13.51 5.87a6 6 0 0 0-10.16 2.14" /><path d="M2.49 10.13a6 6 0 0 0 10.16-2.14" />
-                </svg>
-              </button>
-            </div>
+            <p style={{ color: '#e5e5ea', fontSize: 15, marginBottom: 8, fontWeight: 500 }}>Estratégia</p>
             <button onClick={() => setShowBotSheet(true)} className="btn-ghost" style={{
-              width: '100%', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0,
+              width: '100%', height: 56, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0,
             }}>
               {selectedBot ? (
-                <span style={{ color: 'var(--white)', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedBot.name}</span>
+                <span style={{ color: 'var(--white)', fontWeight: 700, fontSize: 19, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedBot.name}</span>
               ) : (
-                <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>{isLoadingCatalog ? 'A carregar…' : 'Selecionar'}</span>
+                <span style={{ color: 'var(--text-faint)', fontSize: 15 }}>{isLoadingCatalog ? 'A carregar…' : 'Selecionar'}</span>
               )}
-              <span style={{ display: 'flex', color: 'var(--text-faint)', flexShrink: 0 }}>
-                <IconList />
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
+              }}>
+                <IconRefresh />
               </span>
+            </button>
+          </div>
+
+          <div>
+            <p style={{ color: '#e5e5ea', fontSize: 15, marginBottom: 8, fontWeight: 500 }}>Vídeo Aula</p>
+            <button onClick={() => navigate('/video-lessons')} style={{
+              width: '100%', height: 56, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              background: 'linear-gradient(180deg, #ef4a5c, #dc2f43)', color: '#fff',
+            }}>
+              <IconPlayFilled />
+              <IconInfoCircle />
             </button>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <button onClick={() => selectedBot && setShowConfig(true)} disabled={!selectedBot} title="Configurar parâmetros"
-            className="btn-ghost" style={{
+            className="btn-ghost config-gear-btn" style={{
               width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               opacity: !selectedBot ? 0.4 : 1, cursor: !selectedBot ? 'not-allowed' : 'pointer',
               borderColor: pendingConfig ? 'var(--blue)' : undefined,
@@ -438,43 +450,49 @@ export function ControlsSection() {
           <button onClick={handleToggle} disabled={!selectedBot || wsStatus !== 'connected' || isStarting}
             title={isStarting ? 'A iniciar…' : undefined}
             style={{
-              width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              border: `2px solid ${!selectedBot || wsStatus !== 'connected' || isStarting ? 'var(--border)' : isRunning ? 'var(--red)' : isPaused ? '#f5a623' : 'var(--green)'}`,
-              background: !selectedBot || wsStatus !== 'connected' || isStarting ? 'transparent' : isRunning ? 'rgba(233,32,63,0.1)' : isPaused ? 'rgba(245,166,35,0.1)' : 'rgba(24,201,122,0.1)',
+              width: 56, height: 56, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              border: `2.5px solid ${!selectedBot || wsStatus !== 'connected' || isStarting ? 'var(--border)' : isRunning ? 'var(--red-hi)' : isPaused ? '#f5a623' : 'var(--green)'}`,
+              background: 'transparent',
               opacity: !selectedBot || wsStatus !== 'connected' || isStarting ? 0.4 : 1,
               cursor: !selectedBot || wsStatus !== 'connected' || isStarting ? 'not-allowed' : 'pointer',
             }}>
             {isStarting ? (
-              <span style={{ width: 16, height: 16, border: '2px solid var(--text-dim)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+              <span style={{ width: 18, height: 18, border: '2px solid var(--text-dim)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
             ) : isRunning ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red-hi)" strokeWidth="3" strokeLinecap="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--red-hi)" strokeWidth="3" strokeLinecap="round">
                 <line x1="8" y1="5" x2="8" y2="19" /><line x1="16" y1="5" x2="16" y2="19" />
               </svg>
             ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={isPaused ? '#f5a623' : 'var(--green)'}><path d="M6 4l14 8-14 8V4z" /></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={isPaused ? '#f5a623' : 'var(--green)'}><path d="M6 4l14 8-14 8V4z" /></svg>
             )}
           </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
               {steps.map((s, i) => (
-                <span key={s} style={{ fontSize: 11, fontWeight: 500, color: i <= progressStep ? 'var(--white)' : 'var(--text-faint)' }}>{s}</span>
+                <span key={s} style={{ fontSize: 14, fontWeight: 500, color: i <= progressStep ? 'var(--white)' : 'var(--text-faint)' }}>{s}</span>
               ))}
             </div>
             <div style={{ position: 'relative', height: 4, background: 'var(--border)', borderRadius: 4 }}>
               <div style={{ position: 'absolute', height: '100%', background: 'var(--blue)', borderRadius: 4, width: `${animProgress}%`, transition: 'width 0.5s' }} />
               {steps.map((_, i) => (
                 <div key={i} style={{
-                  position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, borderRadius: '50%',
+                  position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%',
                   border: `2px solid ${i <= progressStep ? 'var(--blue)' : 'var(--border-hi)'}`,
                   background: i <= progressStep ? 'white' : 'var(--bg-card-hi)',
-                  left: `calc(${(i / (steps.length - 1)) * 100}% - 6px)`,
+                  left: `calc(${(i / (steps.length - 1)) * 100}% - 7px)`,
                 }} />
               ))}
             </div>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 1023px) {
+          .config-gear-btn { display: none !important; }
+        }
+      `}</style>
 
       {/* ── Sheet em vidro: Selecionar Tipo de Conta (via Portal) ── */}
       {showAccSheet && (
