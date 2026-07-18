@@ -2,6 +2,14 @@ import { useMemo } from 'react'
 import { useTrading } from '../context/TradingContext'
 import { useBots } from '../context/BotsContext'
 
+// Cores exactas da imagem de referência — painel Saldo quase preto,
+// painel Lucro/Prejuízo cinza mais claro, faixa Operações preta pura.
+const BG_SALDO = '#141416'
+const BG_LUCRO = '#26262b'
+const BG_OPERACOES = '#0a0a0c'
+const COLOR_LABEL = '#a3a3ab'
+const COLOR_GREEN = '#22c55e'
+
 export function BalanceCard() {
   const { balance, currency, loading } = useTrading()
   const { sessionBots } = useBots()
@@ -14,6 +22,7 @@ export function BalanceCard() {
     }
   }, [sessionBots])
   const isProfit = netPnL >= 0
+
   return (
     <div className="card" style={{ position: 'relative', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
       {loading && (
@@ -30,26 +39,42 @@ export function BalanceCard() {
           </div>
         </div>
       )}
+
       <div style={{ display: 'flex' }}>
-        <div style={{ flex: 1, padding: 16, background: 'var(--bg-card)', borderRight: '1px solid var(--border)', minWidth: 0 }}>
-          <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>Saldo</p>
-          <p className="tabular" style={{ color: 'var(--white)', fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 700, letterSpacing: '-0.01em' }}>
-            <span style={{ color: 'var(--text-faint)', fontSize: 16 }}>$</span> {balance.toFixed(2)}{' '}
-            <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-dim)' }}>{currency}</span>
+        {/* ── Saldo ── */}
+        <div style={{ flex: 1, padding: '16px 18px', background: BG_SALDO, minWidth: 0 }}>
+          <p style={{ color: COLOR_LABEL, fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Saldo</p>
+          <p className="tabular" style={{ fontFamily: 'var(--font-rounded)', color: '#ffffff', fontSize: 'clamp(19px, 5.2vw, 25px)', fontWeight: 800, letterSpacing: '-0.01em' }}>
+            $ {balance.toFixed(2)}{' '}
+            <span style={{ fontSize: '0.55em', fontWeight: 700, color: '#c2c2c8' }}>{currency}</span>
           </p>
         </div>
-        <div style={{ flex: 1, padding: 16, background: 'var(--bg-card-hi)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minWidth: 0 }}>
-          <p style={{ color: 'var(--text-dim)', fontSize: 12, fontWeight: 500, marginBottom: 8 }}>Lucro/Prejuízo</p>
-          <p className="tabular" style={{ fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 700, letterSpacing: '-0.01em', color: isProfit ? 'var(--green)' : 'var(--red-hi)' }}>
-            <span style={{ fontSize: 16, opacity: 0.7 }}>$</span> {netPnL < 0 ? '-' : ''}{Math.abs(netPnL).toFixed(2)}
+
+        {/* ── Lucro/Prejuízo ── */}
+        <div style={{ flex: 1, padding: '16px 18px', background: BG_LUCRO, minWidth: 0 }}>
+          <p style={{ color: COLOR_LABEL, fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Lucro/Prejuízo</p>
+          <p className="tabular" style={{ fontFamily: 'var(--font-rounded)', fontSize: 'clamp(19px, 5.2vw, 25px)', fontWeight: 800, letterSpacing: '-0.01em' }}>
+            <span style={{ color: '#ffffff' }}>$</span>{' '}
+            <span style={{ color: isProfit ? COLOR_GREEN : 'var(--red-hi)' }}>
+              {netPnL < 0 ? '-' : ''}{Math.abs(netPnL).toFixed(2)}
+            </span>
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, color: 'var(--text-dim)', fontSize: 12 }}>
-            <span>Operações</span>
-            <span style={{ color: 'var(--green)', fontWeight: 700 }}>{totalWins}</span>
-            <span>/</span>
-            <span style={{ color: 'var(--red-hi)', fontWeight: 700 }}>{totalLosses}</span>
-          </div>
         </div>
+      </div>
+
+      {/* ── Operações — faixa de largura total, alinhada à direita ── */}
+      <div style={{
+        background: BG_OPERACOES, padding: '10px 18px',
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6,
+      }}>
+        <span style={{ color: COLOR_LABEL, fontSize: 14, fontWeight: 600 }}>Operações</span>
+        <span className="tabular" style={{ fontFamily: 'var(--font-rounded)', color: COLOR_GREEN, fontWeight: 800, fontSize: 15 }}>
+          {totalWins}
+        </span>
+        <span style={{ color: COLOR_LABEL, fontSize: 14 }}>/</span>
+        <span className="tabular" style={{ fontFamily: 'var(--font-rounded)', color: '#e8e8ec', fontWeight: 800, fontSize: 15 }}>
+          {totalLosses}
+        </span>
       </div>
     </div>
   )
