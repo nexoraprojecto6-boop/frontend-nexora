@@ -7,9 +7,17 @@ type MainTab = 'trader' | 'notificacoes'
 // ── Ícones inline (sem emoji) ───────────────────────────────
 function IconTrash() {
   return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 5h14" /><path d="M8 5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2" />
       <path d="M5 5l1 12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-12" />
+    </svg>
+  )
+}
+// Tendência/gráfico — segundo ícone do cabeçalho, igual à imagem
+function IconTrendUp() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 17 9 11 13 15 21 7" /><polyline points="14 7 21 7 21 14" />
     </svg>
   )
 }
@@ -29,26 +37,8 @@ function IconBell() {
   )
 }
 
-// Formata o dígito do tick final (0-9) — não é um preço, é o
-// último algarismo da cotação no momento em que a operação terminou.
-//
-// Prioridade: t.exitDigit, já calculado no BACKEND (a estratégia sabe
-// o nº de casas decimais correcto do símbolo). Só recorre ao cálculo
-// local a partir de exitTick como fallback de compatibilidade, caso
-// o bot ainda não envie exitDigit (versões antigas / outras
-// estratégias) — e mesmo assim avisa que pode ser impreciso.
-function formatTickDigit(exitDigit: unknown, exitTick: unknown): string {
-  if (typeof exitDigit === 'number' && !Number.isNaN(exitDigit)) {
-    return String(exitDigit)
-  }
-  // Fallback: aproximação a partir do preço bruto (pode estar errado
-  // se o preço tiver zeros à direita cortados pelo toString/JSON).
-  if (typeof exitTick === 'number' && !Number.isNaN(exitTick)) {
-    const digit = Math.trunc(Math.abs(exitTick) * 100) % 10
-    return String(digit)
-  }
-  return '—'
-}
+// Cor da linha — bloco arredondado, igual à imagem
+const ROW_BG = '#1b1b1f'
 
 export function TradesTable() {
   const { trades, clearTrades } = useBots()
@@ -60,17 +50,22 @@ export function TradesTable() {
         <div style={{ display: 'flex', gap: 20 }}>
           {(['trader', 'notificacoes'] as MainTab[]).map(tab => (
             <button key={tab} onClick={() => setMainTab(tab)} style={{
-              fontWeight: 600, fontSize: 14, color: mainTab === tab ? 'var(--white)' : 'var(--text-faint)',
+              fontWeight: 600, fontSize: 15, color: mainTab === tab ? 'var(--white)' : 'var(--text-faint)',
               textTransform: 'capitalize',
             }}>
               {tab === 'trader' ? 'Trader' : 'Notificações'}
             </button>
           ))}
         </div>
-        <button onClick={() => { if (confirm('Limpar histórico de trades?')) clearTrades() }} title="Limpar"
-          style={{ color: 'var(--text-dim)', padding: 4 }}>
-          <IconTrash />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button onClick={() => { if (confirm('Limpar histórico de trades?')) clearTrades() }} title="Limpar"
+            style={{ color: 'var(--text-dim)', padding: 4 }}>
+            <IconTrash />
+          </button>
+          <button title="Gráfico" style={{ color: 'var(--text-dim)', padding: 4 }}>
+            <IconTrendUp />
+          </button>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
@@ -100,39 +95,41 @@ export function TradesTable() {
               <p style={{ fontSize: 12, color: 'var(--text-faint)' }}>Selecciona um bot e toca em play para começar</p>
             </div>
           ) : (
-            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
-              <colgroup>
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '22%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '18%' }} />
-                <col style={{ width: '20%' }} />
-              </colgroup>
-              <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
-                <tr style={{ color: 'var(--text-dim)', fontSize: 11, borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 600 }}>Hora</th>
-                  <th style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 600 }}>Tipo</th>
-                  <th style={{ textAlign: 'right', padding: '8px 6px', fontWeight: 600 }}>Tick Final</th>
-                  <th style={{ textAlign: 'right', padding: '8px 6px', fontWeight: 600 }}>Preço</th>
-                  <th style={{ textAlign: 'right', padding: '8px 6px', fontWeight: 600 }}>Resultado</th>
-                </tr>
-              </thead>
-              <tbody style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+            <div style={{ padding: '4px 12px 10px' }}>
+              {/* Cabeçalho — sticky, fonte monoespaçada igual à imagem */}
+              <div style={{
+                position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)',
+                display: 'grid', gridTemplateColumns: '16% 26% 22% 16% 20%',
+                padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--white)',
+              }}>
+                <span>Hora</span>
+                <span>Tipo</span>
+                <span style={{ textAlign: 'right' }}>Tick Final</span>
+                <span style={{ textAlign: 'right' }}>Preço</span>
+                <span style={{ textAlign: 'right' }}>Resultado</span>
+              </div>
+
+              {/* Linhas — blocos arredondados, igual à imagem */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
                 {trades.map((t: TradeRecord, i: number) => (
-                  <tr key={`${t.id}-${i}`} style={{ borderBottom: '1px solid rgba(31,44,74,0.4)' }}>
-                    <td style={{ padding: '10px 6px', color: 'var(--text-dim)', wordBreak: 'break-word' }}>{t.hora}</td>
-                    <td style={{ padding: '10px 6px', color: 'var(--text-dim)', wordBreak: 'break-word' }}>{t.contractType ?? '—'}</td>
-                    <td style={{ padding: '10px 6px', textAlign: 'right', color: 'var(--text-dim)', wordBreak: 'break-word', fontWeight: 700 }}>
-                      {formatTickDigit(t.exitDigit, t.exitTick)}
-                    </td>
-                    <td style={{ padding: '10px 6px', textAlign: 'right', color: 'var(--text-faint)', wordBreak: 'break-word' }}>{t.stake.toFixed(2)}</td>
-                    <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? 'var(--green)' : 'var(--red-hi)', wordBreak: 'break-word' }}>
-                      {t.profit >= 0 ? '' : '-'}{Math.abs(t.profit).toFixed(2)}
-                    </td>
-                  </tr>
+                  <div key={`${t.id}-${i}`} style={{
+                    display: 'grid', gridTemplateColumns: '16% 26% 22% 16% 20%', alignItems: 'center',
+                    background: ROW_BG, borderRadius: 10, padding: '10px 10px',
+                    fontFamily: 'var(--font-mono)', fontSize: 13,
+                  }}>
+                    <span style={{ color: '#fff' }}>{t.hora}</span>
+                    <span style={{ color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.contractType ?? '—'}</span>
+                    <span style={{ color: '#fff', textAlign: 'right' }}>
+                      {typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : '—'}
+                    </span>
+                    <span style={{ color: '#fff', textAlign: 'right' }}>{t.stake.toFixed(2)}</span>
+                    <span style={{ textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? '#22c55e' : 'var(--red-hi)' }}>
+                      {Math.abs(t.profit).toFixed(2)}
+                    </span>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </div>
           )
         )}
       </div>
