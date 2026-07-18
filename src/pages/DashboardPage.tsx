@@ -113,8 +113,8 @@ function DashboardInner() {
           }
           .dash-chart    { order: 1; flex-shrink: 0; }
           .dash-balance  { order: 2; flex-shrink: 0; }
-          .dash-trades   { order: 3; }
-          .dash-controls { order: 4; flex-shrink: 0; }
+          .dash-controls { order: 3; flex-shrink: 0; }
+          .dash-trades   { order: 4; }
           .dash-footer   { order: 5; flex-shrink: 0; }
 
           .dash-trades {
