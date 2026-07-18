@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap');
+
 /* ============================================================
    NEXORA FOREX — Design Tokens (paleta Bertoni)
    Base azul-marinho quase-preto + azul-roxo como cor primária
@@ -39,6 +41,7 @@
   --font-display:  'Rajdhani', system-ui, sans-serif;
   --font-body:     'Inter', system-ui, sans-serif;
   --font-mono:     'JetBrains Mono', monospace;
+  --font-rounded:  'Poppins', system-ui, sans-serif;
 
   --radius-sm: 8px;
   --radius-md: 14px;
