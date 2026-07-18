@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useTrading } from '../context/TradingContext'
 import { BotsProvider } from '../context/BotsContext'
 import { ChartSection } from '../components/ChartSection'
 import { BalanceCard } from '../components/BalanceCard'
@@ -46,7 +45,6 @@ function DashboardLoader() {
 function DashboardInner() {
   const navigate = useNavigate()
   const { isLoading: authLoading } = useAuth()
-  const { isConnected } = useTrading()
   const { show, complete } = useLoader()
 
   useEffect(() => {
@@ -70,12 +68,6 @@ function DashboardInner() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="logo-text" style={{ fontSize: 16 }}>NEXORA FOREX</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span className={`dot ${isConnected ? 'live' : 'off'}`} />
-            <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: isConnected ? 'var(--text-faint)' : 'var(--red-hi)', display: 'none' }} className="sm-show">
-              {isConnected ? 'live' : 'offline'}
-            </span>
-          </div>
         </div>
         <button onClick={() => { show('A carregar...'); navigate('/menu') }}
           style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>
@@ -137,7 +129,6 @@ function DashboardInner() {
         @media (max-width: 480px) {
           .dash-trades { min-height: 150px !important; }
         }
-        .sm-show { display: inline !important; }
       `}</style>
     </div>
   )
