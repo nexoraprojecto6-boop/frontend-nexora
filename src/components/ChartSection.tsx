@@ -21,7 +21,7 @@ const RECONNECT_MS  = 2_500
 // Cores exactas da imagem de referência
 const COLOR_HOT     = '#2e7d32'   // verde sólido — barra dominante
 const COLOR_COLD    = '#c62828'   // vermelho sólido — barras mais fracas
-const COLOR_NEUTRAL = '#8f99c4'   // cinza azulado — barras neutras (paleta Bertoni)
+const COLOR_NEUTRAL = '#b8bcc8'   // cinza claro — barras neutras (exato da imagem de referência)
 
 const SYMBOLS = [
   { value: '1HZ100V', label: 'Vol 100 (1s)' },
@@ -78,6 +78,13 @@ const IconBar = () => (
 const IconChevron = ({ up }: { up?: boolean }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <path d={up ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}/>
+  </svg>
+)
+const IconLandscape = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2"/>
+    <circle cx="8.5" cy="8.5" r="1.5"/>
+    <path d="M21 15l-5-5L5 21"/>
   </svg>
 )
 
@@ -249,20 +256,29 @@ export function ChartSection() {
         padding: '10px 14px', borderBottom: '1px solid var(--border)',
       }}>
         {/* Ícone + estado */}
-        <div style={{
-          width: 34, height: 34, borderRadius: 8,
-          background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--text-dim)', flexShrink: 0,
-        }}>
-          <IconBar />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8,
+            background: '#ffffff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#1a1a1a',
+          }}>
+            <IconBar />
+          </div>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--text-dim)',
+          }}>
+            <IconLandscape />
+          </div>
         </div>
 
         {/* Label central */}
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <span style={{ color: 'var(--white)', fontSize: 15, fontWeight: 700 }}>
+          <span style={{ color: 'var(--white)', fontSize: 17, fontWeight: 500 }}>
             Last Digits:{' '}
-            <span style={{ color: lastD !== null ? COLOR_HOT : 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+            <span style={{ color: lastD !== null ? COLOR_HOT : 'var(--text-dim)' }}>
               {lastD !== null ? lastD : '—'}
             </span>
           </span>
@@ -270,15 +286,15 @@ export function ChartSection() {
 
         {/* Contagem + selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 600 }}>
+          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, fontWeight: 400 }}>
             {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
           </span>
           <div style={{ position: 'relative' }}>
             <button onClick={() => setWinOpen(o => !o)} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28, borderRadius: 7,
-              background: 'var(--bg-card-hi)', border: '1px solid var(--border-hi)',
-              cursor: 'pointer', color: 'var(--text-dim)',
+              width: 28, height: 28,
+              background: 'transparent', border: 'none',
+              cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
             }}>
               <IconChevron up={winOpen} />
             </button>
@@ -316,8 +332,8 @@ export function ChartSection() {
             }}>
               {/* Percentagem — topo da barra */}
               <span className="tabular" style={{
-                fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                color: 'var(--text-dim)', lineHeight: 1, minHeight: 14,
+                fontSize: 12, fontWeight: 500,
+                color: 'rgba(255,255,255,0.92)', lineHeight: 1, minHeight: 14,
               }}>
                 {pct.toFixed(1)}%
               </span>
@@ -327,14 +343,14 @@ export function ChartSection() {
                 width: '100%',
                 height: `max(4px, calc(var(--chart-bar-max) * ${ratio.toFixed(4)}))`,
                 background: color,
-                borderRadius: '4px 4px 2px 2px',
+                borderRadius: 0,
                 flexShrink: 0,
               }} />
 
               {/* Dígito */}
               <span className="tabular" style={{
-                fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                color: 'var(--text-dim)', lineHeight: 1,
+                fontSize: 15, fontWeight: 700,
+                color: 'var(--white)', lineHeight: 1,
               }}>
                 {digit}
               </span>
