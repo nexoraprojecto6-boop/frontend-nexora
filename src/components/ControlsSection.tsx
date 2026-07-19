@@ -321,8 +321,22 @@ export function ControlsSection() {
   const [animProgress, setAnimProgress] = useState(0)
 
   useEffect(() => {
-    const target = isRunning && progressStep >= 0 ? ((progressStep + 1) / steps.length) * 100 : 0
-    const id = setInterval(() => setAnimProgress(p => { const d = target - p; return Math.abs(d) < 0.5 ? target : p + d * 0.1 }), 16)
+    // target agora usa a MESMA fórmula da posição dos pontos (dots) mais abaixo:
+    // left: (i / (steps.length - 1)) * 100%
+    // Antes o preenchimento usava (step+1)/steps.length, que NUNCA batia
+    // com a posição real dos pontos (0%, 50%, 100%) — por isso a barra
+    // parecia "parar no meio". Agora fica sempre exatamente em cima do
+    // ponto certo: Analisando = 0%, Contrato aberto = 50%, Fechado = 100%.
+    const target = isRunning && progressStep >= 0 ? (progressStep / (steps.length - 1)) * 100 : 0
+
+    const id = setInterval(() => setAnimProgress(p => {
+      const d = target - p
+      if (Math.abs(d) < 0.3) return target
+      // easing mais rápido (era 0.1) + piso mínimo de velocidade, pra não
+      // "arrastar" a cauda da animação — chega no ponto exato bem mais rápido
+      const step = d * 0.45
+      return Math.abs(step) < 1.5 ? p + Math.sign(d) * 1.5 : p + step
+    }), 16)
     return () => clearInterval(id)
   }, [isRunning, progressStep])
 
