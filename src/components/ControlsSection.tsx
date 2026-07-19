@@ -436,8 +436,8 @@ export function ControlsSection() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 3vw, 16px)' }}>
           <button onClick={() => selectedBot && setShowConfig(true)} disabled={!selectedBot} title="Configurar parâmetros"
-            className="btn-ghost config-gear-btn" style={{
-              width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            className="btn-ghost" style={{
+              width: 'clamp(36px, 10vw, 48px)', height: 'clamp(36px, 10vw, 48px)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               opacity: !selectedBot ? 0.4 : 1, cursor: !selectedBot ? 'not-allowed' : 'pointer',
               borderColor: pendingConfig ? 'var(--blue)' : undefined,
             }}>
@@ -487,12 +487,6 @@ export function ControlsSection() {
           </div>
         </div>
       </div>
-
-      <style>{`
-        @media (max-width: 1023px) {
-          .config-gear-btn { display: none !important; }
-        }
-      `}</style>
 
       {/* ── Sheet em vidro: Selecionar Tipo de Conta (via Portal) ── */}
       {showAccSheet && (
