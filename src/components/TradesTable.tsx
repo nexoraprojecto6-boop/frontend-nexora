@@ -4,6 +4,11 @@ import type { TradeRecord } from '../context/BotsContext'
 
 type MainTab = 'trader' | 'notificacoes'
 
+// Colunas em fr — somam sempre a 100% do espaço disponível, nunca
+// transbordam horizontalmente (diferente de % fixas, que podiam
+// "quebrar" em ecrãs estreitos quando o conteúdo era mais largo).
+const COLS = '0.85fr 1.3fr 1.15fr 0.85fr 1.05fr'
+
 // ── Ícones inline (sem emoji) ───────────────────────────────
 function IconTrash() {
   return (
@@ -23,14 +28,14 @@ function IconTrendUp() {
 }
 function IconClipboard() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="11" width="18" height="10" rx="2" /><circle cx="12" cy="5" r="2" /><line x1="12" y1="7" x2="12" y2="11" />
     </svg>
   )
 }
 function IconBell() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
@@ -39,6 +44,35 @@ function IconBell() {
 
 // Cor da linha — bloco arredondado, igual à imagem
 const ROW_BG = '#1b1b1f'
+
+// Célula de texto: nunca quebra linha (nowrap + ellipsis) para que
+// uma hora/tick/preço mais comprido nunca estique a altura da linha
+// nem desalinhe a grelha.
+const cellBase: React.CSSProperties = {
+  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+}
+
+// Estado vazio (sem trades / sem notificações) — ocupa sempre a
+// altura toda disponível do painel, com tamanhos que escalam por
+// ecrã (clamp) em vez de um valor fixo pequeno.
+function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '100%', minHeight: 220, color: 'var(--text-faint)', gap: 10, padding: '24px 20px', textAlign: 'center',
+    }}>
+      <span style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 'clamp(48px, 12vw, 60px)', height: 'clamp(48px, 12vw, 60px)', borderRadius: '50%',
+        background: 'var(--bg-card-hi)', color: 'var(--text-dim)', flexShrink: 0,
+      }}>
+        {icon}
+      </span>
+      <p style={{ fontSize: 'clamp(14px, 3.6vw, 16px)', fontWeight: 600, color: 'var(--text-dim)' }}>{title}</p>
+      <p style={{ fontSize: 'clamp(12px, 3vw, 13.5px)', color: 'var(--text-faint)', maxWidth: 280, lineHeight: 1.4 }}>{subtitle}</p>
+    </div>
+  )
+}
 
 export function TradesTable() {
   const { trades, clearTrades } = useBots()
@@ -50,7 +84,7 @@ export function TradesTable() {
         <div style={{ display: 'flex', gap: 20 }}>
           {(['trader', 'notificacoes'] as MainTab[]).map(tab => (
             <button key={tab} onClick={() => setMainTab(tab)} style={{
-              fontWeight: 600, fontSize: 15, color: mainTab === tab ? 'var(--white)' : 'var(--text-faint)',
+              fontWeight: 600, fontSize: 'clamp(13px, 3.6vw, 15px)', color: mainTab === tab ? 'var(--white)' : 'var(--text-faint)',
               textTransform: 'capitalize',
             }}>
               {tab === 'trader' ? 'Trader' : 'Notificações'}
@@ -68,62 +102,54 @@ export function TradesTable() {
         </div>
       </div>
 
+      {/* Painel de conteúdo — altura toda disponível; só esta área rola */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
         {mainTab === 'notificacoes' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 160, color: 'var(--text-faint)', gap: 8 }}>
-            <span style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 44, height: 44, background: 'var(--bg-card-hi)', color: 'var(--text-dim)',
-            }}>
-              <IconBell />
-            </span>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-dim)' }}>Sem notificações</p>
-            <p style={{ fontSize: 12, color: 'var(--text-faint)' }}>Avisos de saldo, metas e stop loss aparecem aqui</p>
-          </div>
+          <EmptyState
+            icon={<IconBell />}
+            title="Sem notificações"
+            subtitle="Avisos de saldo, metas e stop loss aparecem aqui"
+          />
         )}
 
         {mainTab === 'trader' && (
           trades.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 160, color: 'var(--text-faint)', gap: 8 }}>
-              <span style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 44, height: 44, background: 'var(--bg-card-hi)', color: 'var(--text-dim)',
-              }}>
-                <IconClipboard />
-              </span>
-              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-dim)' }}>Nenhum trade ainda</p>
-              <p style={{ fontSize: 12, color: 'var(--text-faint)' }}>Selecciona um bot e toca em play para começar</p>
-            </div>
+            <EmptyState
+              icon={<IconClipboard />}
+              title="Nenhum trade ainda"
+              subtitle="Selecciona um bot e toca em play para começar"
+            />
           ) : (
-            <div style={{ padding: '4px 12px 10px' }}>
+            <div style={{ padding: '4px 10px 10px' }}>
               {/* Cabeçalho — sticky, fonte monoespaçada igual à imagem */}
               <div style={{
                 position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)',
-                display: 'grid', gridTemplateColumns: '16% 26% 22% 16% 20%',
-                padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--white)',
+                display: 'grid', gridTemplateColumns: COLS, gap: 6,
+                padding: '8px 8px', fontFamily: 'var(--font-mono)',
+                fontSize: 'clamp(11px, 2.8vw, 13px)', fontWeight: 700, color: 'var(--white)',
               }}>
-                <span>Hora</span>
-                <span>Tipo</span>
-                <span style={{ textAlign: 'right' }}>Tick Final</span>
-                <span style={{ textAlign: 'right' }}>Preço</span>
-                <span style={{ textAlign: 'right' }}>Resultado</span>
+                <span style={cellBase}>Hora</span>
+                <span style={cellBase}>Tipo</span>
+                <span style={{ ...cellBase, textAlign: 'right' }}>Tick Final</span>
+                <span style={{ ...cellBase, textAlign: 'right' }}>Preço</span>
+                <span style={{ ...cellBase, textAlign: 'right' }}>Resultado</span>
               </div>
 
               {/* Linhas — blocos arredondados, igual à imagem */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
                 {trades.map((t: TradeRecord, i: number) => (
                   <div key={`${t.id}-${i}`} style={{
-                    display: 'grid', gridTemplateColumns: '16% 26% 22% 16% 20%', alignItems: 'center',
-                    background: ROW_BG, borderRadius: 10, padding: '10px 10px',
-                    fontFamily: 'var(--font-mono)', fontSize: 13,
+                    display: 'grid', gridTemplateColumns: COLS, gap: 6, alignItems: 'center',
+                    background: ROW_BG, borderRadius: 10, padding: '10px 8px',
+                    fontFamily: 'var(--font-mono)', fontSize: 'clamp(11px, 2.8vw, 13px)',
                   }}>
-                    <span style={{ color: '#fff' }}>{t.hora}</span>
-                    <span style={{ color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.contractType ?? '—'}</span>
-                    <span style={{ color: '#fff', textAlign: 'right' }}>
+                    <span style={{ ...cellBase, color: '#fff' }}>{t.hora}</span>
+                    <span style={{ ...cellBase, color: '#fff' }}>{t.contractType ?? '—'}</span>
+                    <span style={{ ...cellBase, color: '#fff', textAlign: 'right' }} title={typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : undefined}>
                       {typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : '—'}
                     </span>
-                    <span style={{ color: '#fff', textAlign: 'right' }}>{t.stake.toFixed(2)}</span>
-                    <span style={{ textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? '#22c55e' : 'var(--red-hi)' }}>
+                    <span style={{ ...cellBase, color: '#fff', textAlign: 'right' }}>{t.stake.toFixed(2)}</span>
+                    <span style={{ ...cellBase, textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? '#22c55e' : 'var(--red-hi)' }}>
                       {Math.abs(t.profit).toFixed(2)}
                     </span>
                   </div>
