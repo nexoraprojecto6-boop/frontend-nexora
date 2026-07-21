@@ -54,9 +54,7 @@ export default function LoginPage() {
       // Credenciais erradas → 401 do backend. Mostramos a mensagem certa
       // em vez de deixar o loader a girar para sempre.
       const msg = err?.message || 'Não foi possível entrar.'
-      if (msg.toLowerCase().includes('verific')) {
-        navigate('/verify-pending', { state: { email: email.trim() } })
-      } else if (msg.includes('401') || msg.toLowerCase().includes('inválid') || msg.toLowerCase().includes('incorret')) {
+      if (msg.includes('401') || msg.toLowerCase().includes('inválid') || msg.toLowerCase().includes('incorret')) {
         setError('Email ou senha incorretos.')
       } else {
         setError(msg)
