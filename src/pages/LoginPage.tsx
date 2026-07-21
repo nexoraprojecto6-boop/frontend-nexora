@@ -4,7 +4,6 @@ import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
-import derivLogo from './deriv-logo.png'
 
 // ---------------------------------------------------------------------------
 // Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
@@ -154,21 +153,6 @@ export default function LoginPage() {
         <div style={{ marginTop: 30, textAlign: 'center' }}>
           <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
         </div>
-
-        {/* Badge / logótipo da Deriv — no final de tudo */}
-        <div style={derivBadgeStyle}>
-          <div style={derivLogoBoxStyle}>
-            <img
-              src={derivLogo}
-              alt="Deriv"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-            />
-          </div>
-          <span style={{ fontSize: 10.5, color: 'var(--text-faint)', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-            From Deriv API
-          </span>
-        </div>
       </div>
     </div>
   )
@@ -279,18 +263,6 @@ const cardStyle: React.CSSProperties = {
   background: 'rgba(255,255,255,0.035)',
   backdropFilter: 'blur(28px) saturate(150%)',
   WebkitBackdropFilter: 'blur(28px) saturate(150%)',
-}
-
-const derivBadgeStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-  marginTop: 28,
-}
-
-const derivLogoBoxStyle: React.CSSProperties = {
-  width: 56, height: 56, borderRadius: 12, overflow: 'hidden',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'transparent',
-  border: 'none',
 }
 
 const cleanInputStyle: React.CSSProperties = {
