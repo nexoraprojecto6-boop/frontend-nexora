@@ -4,7 +4,7 @@ import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
-import derivLogo from './deriv-assets/deriv-logo.svg'
+import derivLogo from './deriv-assets/deriv-logo.png'
 
 // ---------------------------------------------------------------------------
 // Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
@@ -161,7 +161,7 @@ export default function LoginPage() {
             <img
               src={derivLogo}
               alt="Deriv"
-              style={{ maxWidth: '70%', maxHeight: '70%', objectFit: 'contain', opacity: 0.9 }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
             />
           </div>
@@ -287,7 +287,7 @@ const derivBadgeStyle: React.CSSProperties = {
 }
 
 const derivLogoBoxStyle: React.CSSProperties = {
-  width: 44, height: 44,
+  width: 56, height: 56, borderRadius: 12, overflow: 'hidden',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   background: 'transparent',
   border: 'none',
