@@ -242,6 +242,7 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
 export function ControlsSection() {
   const navigate = useNavigate()
   const { accounts, currentAccount, setCurrentAccount, localUser } = useAuth()
+  const loader = useLoader()
   // Para administradores, os nomes das contas ficam mais explícitos:
   // Demo -> "Virtual", Real -> "Ao Vivo" — independente das labels
   // globais configuráveis em accLabels (essas continuam a valer
@@ -252,7 +253,6 @@ export function ControlsSection() {
     catalogBots, sessionBots, trades, openTrades, wsStatus, isLoadingCatalog,
     lastError, statusMessage, listCatalogBots, startCatalogBot, stopBot, resumeBot,
   } = useBots()
-  const loader = useLoader()
 
   const [accLabels, setAccLabels] = useState({ realLabel: 'REAL', demoLabel: 'DEMO' })
   useEffect(() => { api.getAccountLabels().then(setAccLabels).catch(() => {}) }, [])
@@ -395,6 +395,16 @@ export function ControlsSection() {
     }, 600)
   }
 
+  // ── Vídeo Aula: mesma rota que "Aprende a Operar" (MenuPage) ──
+  // Loader curto e rápido: aparece, navega e completa em sequência,
+  // sem await nem delay artificial — só um feedback visual
+  // instantâneo, sem travar a abertura da página.
+  const goToAprenderAOperar = () => {
+    loader.show('A abrir aula...')
+    navigate('/aprender-a-operar')
+    loader.complete('Pronto!')
+  }
+
   const accLabel = !currentAccount ? 'Selecionar' : currentAccount.is_virtual ? demoLabelDisplay : realLabelDisplay
   const accColor = !currentAccount ? 'var(--text-faint)' : currentAccount.is_virtual ? demoColorDisplay : realColorDisplay
 
@@ -438,7 +448,7 @@ export function ControlsSection() {
 
           <div style={{ minWidth: 0 }}>
             <p style={{ color: '#e5e5ea', fontSize: 'clamp(11px, 3vw, 15px)', marginBottom: 6, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Vídeo Aula</p>
-            <button onClick={() => navigate('/video-lessons')} style={{
+            <button onClick={goToAprenderAOperar} style={{
               width: '100%', height: 'clamp(44px, 11vw, 56px)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(5px, 2vw, 10px)',
               background: 'linear-gradient(180deg, #ef4a5c, #dc2f43)', color: '#fff',
             }}>
