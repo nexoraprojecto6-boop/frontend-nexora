@@ -174,6 +174,19 @@ export default function MenuPage() {
   const handleLogout = async () => { show('A sair...'); await logout() }
   const goToAdmin = () => { show('A carregar painel admin...'); navigate('/admin') }
 
+  // ── Navegação com loader curto e rápido ─────────────────────
+  // Usado tanto aqui (botão "Aprende a Operar") quanto no
+  // ControlsSection (botão "Vídeo Aula") — ambos abrem a MESMA
+  // rota /aprender-a-operar. O loader aparece e já é fechado logo
+  // a seguir (sem await, sem delay artificial), só para dar um
+  // feedback visual instantâneo de que algo aconteceu, sem
+  // travar a navegação.
+  const goToAprenderAOperar = () => {
+    show('A abrir aula...')
+    navigate('/aprender-a-operar')
+    complete('Pronto!')
+  }
+
   if (isLoading) return null
 
   return (
@@ -246,7 +259,7 @@ export default function MenuPage() {
             href={`https://hub.deriv.com/tradershub/signup?t=hCp-xUFsKsktJe5FDKcTD2Nd7ZgqdRLk&utm_campaign=NEXORA&utm_medium=affiliate&utm_source=hCp-xUFsKsktJe5FDKcTD2Nd7ZgqdRLk`}
             external icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>}
             label="CADASTRO NA CORRETORA" color="var(--red-hi)" />
-          <MenuItem onClick={() => { show('A carregar...'); navigate('/aprender-a-operar') }}
+          <MenuItem onClick={goToAprenderAOperar}
             icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422A12.083 12.083 0 0119 15.5V19a1 1 0 01-1 1H6a1 1 0 01-1-1v-3.5a12.083 12.083 0 011.84-4.922L12 14z" /></svg>}
             label="APRENDE A OPERAR" color="#f5a623" />
           <MenuItem
