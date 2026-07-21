@@ -225,32 +225,6 @@ export const api = {
     return data
   },
 
-  async resendVerification(email: string): Promise<{ success: boolean; message: string }> {
-    const res = await fetch(`${API_BASE_URL}/api/auth/resend-verification`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
-    }
-    return data
-  },
-
-  async verifyEmail(token: string): Promise<{ success: boolean; token: string; user: LocalUser }> {
-    const res = await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
-    }
-    return data
-  },
-
   async getLocalMe(): Promise<{ success: boolean; user: LocalUser }> {
     return fetchWithLocalAuth('/api/auth/me')
   },
