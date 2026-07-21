@@ -3,7 +3,20 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
-import { glassCard, inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
+import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
+
+// ---------------------------------------------------------------------------
+// Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
+// já existente. Se um dia quiseres ligar a um sistema de idiomas real, basta
+// usar o `activeLang` abaixo).
+// ---------------------------------------------------------------------------
+const FLAGS = [
+  { code: 'ao', emoji: '🇦🇴', label: 'Angola' },
+  { code: 'br', emoji: '🇧🇷', label: 'Brasil' },
+  { code: 'pt', emoji: '🇵🇹', label: 'Portugal' },
+  { code: 'us', emoji: '🇺🇸', label: 'English' },
+  { code: 'es', emoji: '🇪🇸', label: 'Español' },
+]
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -14,6 +27,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [activeLang, setActiveLang] = useState('ao')
 
   useEffect(() => {
     if (!isLocalLoading && isLocalAuthenticated) {
@@ -66,29 +80,52 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ position: 'relative', minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflow: 'hidden' }}>
-      <div style={{
-        position: 'absolute', top: '-25%', left: '50%', transform: 'translateX(-50%)', width: 600, height: 600, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(24,87,255,0.18) 0%, transparent 70%)', pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', bottom: 0, right: 0, width: 420, height: 420, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(233,32,63,0.12) 0%, transparent 70%)', pointerEvents: 'none',
-      }} />
+    <div style={pageWrapStyle}>
+      {/* Fundo total em vidro, com reflexo fosco tipo gráfico de trading */}
+      <GlassChartBackground />
 
-      <div className="card fade-in" style={glassCard}>
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <h1 className="logo-text" style={{ fontSize: 30, marginBottom: 6 }}>NEXORA</h1>
-          <p style={{ color: 'var(--text-faint)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 3 }}>Forex Trading Platform</p>
+      {/* Bandeiras — topo, centradas na horizontal */}
+      <div style={flagsRowStyle}>
+        {FLAGS.map((f) => (
+          <button
+            key={f.code}
+            type="button"
+            title={f.label}
+            aria-label={f.label}
+            onClick={() => setActiveLang(f.code)}
+            style={flagBtnStyle(activeLang === f.code)}
+          >
+            <span style={{ fontSize: 17, lineHeight: 1 }}>{f.emoji}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Cartão de login — liso, sem moldura */}
+      <div className="card fade-in" style={cardStyle}>
+        <div style={{ textAlign: 'center' }}>
+          <h1 className="logo-text" style={{ fontSize: 30, marginBottom: 4, fontWeight: 700, letterSpacing: 0.5 }}>NEXORA</h1>
         </div>
 
-        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', marginBottom: 24 }} />
+        {/* Badge / espaço reservado para o logótipo da Deriv */}
+        <div style={derivBadgeStyle}>
+          <div style={derivLogoBoxStyle}>
+            <img
+              src="/deriv-logo.svg"
+              alt="Deriv"
+              style={{ maxWidth: '70%', maxHeight: '70%', objectFit: 'contain', opacity: 0.9 }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+            />
+          </div>
+          <span style={{ fontSize: 10.5, color: 'var(--text-faint)', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+            From Deriv API
+          </span>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
+        <form onSubmit={handleSubmit} style={{ marginTop: 26 }}>
+          <div style={{ marginBottom: 18 }}>
             <label style={labelStyle} htmlFor="email">Email</label>
             <input
-              id="email" type="email" autoComplete="email" style={inputStyle}
+              id="email" type="email" autoComplete="email" style={cleanInputStyle}
               value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="teu@email.com" disabled={isSubmitting}
             />
@@ -97,14 +134,14 @@ export default function LoginPage() {
           <div style={{ marginBottom: 8 }}>
             <label style={labelStyle} htmlFor="password">Senha</label>
             <input
-              id="password" type="password" autoComplete="current-password" style={inputStyle}
+              id="password" type="password" autoComplete="current-password" style={cleanInputStyle}
               value={password} onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••" disabled={isSubmitting}
             />
           </div>
 
-          <div style={{ textAlign: 'right', marginBottom: 20 }}>
-            <button type="button" onClick={handleForgotPassword} style={{ color: 'var(--text-faint)', fontSize: 12.5 }}>
+          <div style={{ textAlign: 'right', marginBottom: 22 }}>
+            <button type="button" onClick={handleForgotPassword} style={linkBtnStyle}>
               Esqueci a senha
             </button>
           </div>
@@ -116,10 +153,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '24px 0' }}>
-          <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '26px 0' }}>
+          <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
           <p style={{ color: 'var(--text-faint)', fontSize: 12 }}>Não tem conta?</p>
-          <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
         </div>
 
         <div style={{ textAlign: 'center' }}>
@@ -128,10 +165,143 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+        <div style={{ marginTop: 30, textAlign: 'center' }}>
           <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
         </div>
       </div>
     </div>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Fundo de vidro com reflexo de gráfico (puramente decorativo)
+// ---------------------------------------------------------------------------
+function GlassChartBackground() {
+  return (
+    <>
+      <style>{`
+        @keyframes nexora-drift {
+          0%   { transform: translate3d(0, 0, 0) scale(1); }
+          50%  { transform: translate3d(-1.5%, 1%, 0) scale(1.03); }
+          100% { transform: translate3d(0, 0, 0) scale(1); }
+        }
+        @keyframes nexora-sheen {
+          0%   { opacity: 0.35; }
+          50%  { opacity: 0.6; }
+          100% { opacity: 0.35; }
+        }
+      `}</style>
+
+      {/* base escura em vidro */}
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: 'linear-gradient(160deg, #05070c 0%, #0a0e17 45%, #05070c 100%)',
+        zIndex: 0,
+      }} />
+
+      {/* reflexo de gráfico, fosco, tipo água/vidro */}
+      <svg
+        viewBox="0 0 1200 800"
+        preserveAspectRatio="none"
+        style={{
+          position: 'fixed', inset: 0, width: '100%', height: '100%',
+          filter: 'blur(22px)', opacity: 0.5, zIndex: 0,
+          animation: 'nexora-drift 22s ease-in-out infinite',
+        }}
+      >
+        <defs>
+          <linearGradient id="nexoraLine" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="rgba(24,87,255,0)" />
+            <stop offset="45%" stopColor="rgba(24,87,255,0.55)" />
+            <stop offset="70%" stopColor="rgba(233,32,63,0.4)" />
+            <stop offset="100%" stopColor="rgba(24,87,255,0)" />
+          </linearGradient>
+          <linearGradient id="nexoraFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(24,87,255,0.18)" />
+            <stop offset="100%" stopColor="rgba(24,87,255,0)" />
+          </linearGradient>
+        </defs>
+
+        <path
+          d="M0,520 L60,500 L120,540 L180,470 L240,510 L300,430 L360,460 L420,380 L480,420 L540,340 L600,390 L660,300 L720,350 L780,260 L840,300 L900,230 L960,270 L1020,200 L1080,240 L1140,180 L1200,220"
+          fill="none" stroke="url(#nexoraLine)" strokeWidth="3"
+        />
+        <path
+          d="M0,520 L60,500 L120,540 L180,470 L240,510 L300,430 L360,460 L420,380 L480,420 L540,340 L600,390 L660,300 L720,350 L780,260 L840,300 L900,230 L960,270 L1020,200 L1080,240 L1140,180 L1200,220 L1200,800 L0,800 Z"
+          fill="url(#nexoraFill)"
+        />
+      </svg>
+
+      {/* véu de vidro por cima de tudo — dá o efeito "vidro limpo" */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 1,
+        background: 'radial-gradient(circle at 50% 20%, rgba(255,255,255,0.05), transparent 60%)',
+        backdropFilter: 'blur(0.5px)',
+        animation: 'nexora-sheen 8s ease-in-out infinite',
+        pointerEvents: 'none',
+      }} />
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Estilos
+// ---------------------------------------------------------------------------
+const pageWrapStyle: React.CSSProperties = {
+  position: 'relative', minHeight: '100dvh',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: 16, overflow: 'hidden',
+}
+
+const flagsRowStyle: React.CSSProperties = {
+  position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)',
+  display: 'flex', gap: 10, zIndex: 20,
+}
+
+const flagBtnStyle = (active: boolean): React.CSSProperties => ({
+  width: 34, height: 34, borderRadius: '50%',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+  backdropFilter: 'blur(10px)',
+  border: active ? '1px solid rgba(255,255,255,0.25)' : '1px solid rgba(255,255,255,0.08)',
+  cursor: 'pointer', transition: 'all 0.2s ease',
+  boxShadow: active ? '0 0 0 3px rgba(24,87,255,0.15)' : 'none',
+})
+
+const cardStyle: React.CSSProperties = {
+  position: 'relative', zIndex: 10,
+  width: '100%', maxWidth: 400,
+  padding: '48px 36px 36px',
+  borderRadius: 28,
+  border: 'none',
+  boxShadow: 'none',
+  background: 'rgba(255,255,255,0.035)',
+  backdropFilter: 'blur(28px) saturate(150%)',
+  WebkitBackdropFilter: 'blur(28px) saturate(150%)',
+}
+
+const derivBadgeStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+  marginTop: 18,
+}
+
+const derivLogoBoxStyle: React.CSSProperties = {
+  width: 44, height: 44, borderRadius: 12,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.06)',
+}
+
+const cleanInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  background: 'transparent',
+  border: 'none',
+  borderBottom: '1px solid rgba(255,255,255,0.14)',
+  borderRadius: 0,
+  padding: '10px 2px',
+}
+
+const linkBtnStyle: React.CSSProperties = {
+  color: 'var(--text-faint)', fontSize: 12.5,
+  background: 'none', border: 'none', cursor: 'pointer',
 }
