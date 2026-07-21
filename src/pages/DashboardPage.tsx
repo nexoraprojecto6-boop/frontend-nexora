@@ -41,10 +41,36 @@ function DashboardLoader() {
   )
 }
 
+// ── Badge + atalho de admin — aparece no header do dashboard ──
+// isAdmin vem do AuthContext já resolvido de forma síncrona a
+// partir do localStorage (ver AuthContext.tsx), por isso não há
+// nenhum instante em que a versão "normal" apareça para um admin
+// antes deste badge: ou já sabemos que é admin no primeiro render,
+// ou não é admin e isto simplesmente nunca aparece.
+function AdminHeaderBadge() {
+  const navigate = useNavigate()
+  const { show } = useLoader()
+
+  return (
+    <button
+      onClick={() => { show('A abrir painel admin...'); navigate('/admin') }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '5px 12px', borderRadius: 20,
+        background: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.3)',
+        color: '#f5a623', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f5a623' }} />
+      PAINEL ADMIN
+    </button>
+  )
+}
+
 // ── Inner usa os contextos que só existem após BotsProvider ───
 function DashboardInner() {
   const navigate = useNavigate()
-  const { isLoading: authLoading } = useAuth()
+  const { isLoading: authLoading, isAdmin } = useAuth()
   const { show, complete } = useLoader()
 
   useEffect(() => {
@@ -68,6 +94,7 @@ function DashboardInner() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="logo-text" style={{ fontSize: 16 }}>NEXORA FOREX</span>
+          {isAdmin && <AdminHeaderBadge />}
         </div>
         <button onClick={() => { show('A carregar...'); navigate('/menu') }}
           style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>
