@@ -4,7 +4,7 @@ import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
-import derivLogo from './deriv-assets/deriv-logo.png'
+import derivLogo from './deriv-logo.png'
 
 // ---------------------------------------------------------------------------
 // Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
