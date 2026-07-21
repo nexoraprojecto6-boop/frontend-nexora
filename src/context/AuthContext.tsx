@@ -18,11 +18,32 @@ interface AuthContextType {
   isLocalAuthenticated: boolean
   isLocalLoading: boolean
   localUser: LocalUser | null
+  isAdmin: boolean
   loginLocal: (token: string, user: LocalUser) => void
   logoutLocal: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+// ── Leitura síncrona do localStorage para o estado inicial ─────
+// CRÍTICO para a identificação de admin ser instantânea: se
+// isto corresse dentro de um useEffect (como antes), haveria
+// sempre pelo menos um render com role="desconhecido" antes do
+// valor real aparecer — abrindo espaço para mostrar a versão
+// errada do dashboard por um instante. Lendo aqui, o primeiro
+// render já nasce com o role correto.
+function readStoredLocalUser(): LocalUser | null {
+  try {
+    const stored = localStorage.getItem('localUser')
+    return stored ? (JSON.parse(stored) as LocalUser) : null
+  } catch {
+    return null
+  }
+}
+
+function hasStoredLocalToken(): boolean {
+  return !!localStorage.getItem('localToken')
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -31,9 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentAccount, setCurrentAccountState] = useState<Account | null>(null)
   const initialCheckDone = useRef(false)
 
-  const [isLocalAuthenticated, setIsLocalAuthenticated] = useState(false)
-  const [isLocalLoading, setIsLocalLoading] = useState(true)
-  const [localUser, setLocalUser] = useState<LocalUser | null>(null)
+  // Estado inicial já resolvido de forma síncrona — não há "loading"
+  // para a sessão local, porque o valor já está disponível no
+  // exato momento em que o componente monta.
+  const [isLocalAuthenticated, setIsLocalAuthenticated] = useState(hasStoredLocalToken)
+  const [isLocalLoading, setIsLocalLoading] = useState(false)
+  const [localUser, setLocalUser] = useState<LocalUser | null>(readStoredLocalUser)
+
+  const isAdmin = localUser?.role === 'admin'
 
   const loadAccounts = useCallback(async (): Promise<boolean> => {
     try {
@@ -66,16 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initialCheckDone.current) return
     initialCheckDone.current = true
 
-    // Sessão local
-    const localToken = localStorage.getItem('localToken')
-    const storedUser = localStorage.getItem('localUser')
-    if (localToken) {
-      setIsLocalAuthenticated(true)
-      if (storedUser) {
-        try { setLocalUser(JSON.parse(storedUser)) } catch { /* ignora */ }
-      }
-    }
-    setIsLocalLoading(false)
+    // Sessão local: já resolvida de forma síncrona no useState acima.
+    // Nada a fazer aqui — mantido apenas o fluxo da sessão Deriv.
 
     // Sessão Deriv
     const token = localStorage.getItem('token')
@@ -150,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       isAuthenticated, isLoading, accounts, currentAccount,
       setCurrentAccount, logout, refreshAccounts, login,
-      isLocalAuthenticated, isLocalLoading, localUser, loginLocal, logoutLocal,
+      isLocalAuthenticated, isLocalLoading, localUser, isAdmin, loginLocal, logoutLocal,
     }}>
       {children}
     </AuthContext.Provider>
