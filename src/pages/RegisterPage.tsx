@@ -53,7 +53,8 @@ export default function RegisterPage() {
         email: form.email.trim(),
         password: form.password,
       })
-      navigate('/verify-pending', { state: { email: form.email.trim() } })
+      // Cadastro concluído — sem verificação de email, vai direto para o login.
+      navigate('/', { state: { justRegistered: true } })
     } catch (err: any) {
       setGeneralError(err?.message || 'Não foi possível criar a conta.')
     } finally {
