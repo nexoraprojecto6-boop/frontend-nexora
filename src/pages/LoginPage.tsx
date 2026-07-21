@@ -4,6 +4,7 @@ import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
+import derivLogo from './deriv-assets/deriv-logo.svg'
 
 // ---------------------------------------------------------------------------
 // Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
@@ -103,22 +104,7 @@ export default function LoginPage() {
       {/* Cartão de login — liso, sem moldura */}
       <div className="card fade-in" style={cardStyle}>
         <div style={{ textAlign: 'center' }}>
-          <h1 className="logo-text" style={{ fontSize: 30, marginBottom: 4, fontWeight: 700, letterSpacing: 0.5 }}>NEXORA</h1>
-        </div>
-
-        {/* Badge / espaço reservado para o logótipo da Deriv */}
-        <div style={derivBadgeStyle}>
-          <div style={derivLogoBoxStyle}>
-            <img
-              src="/deriv-logo.svg"
-              alt="Deriv"
-              style={{ maxWidth: '70%', maxHeight: '70%', objectFit: 'contain', opacity: 0.9 }}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-            />
-          </div>
-          <span style={{ fontSize: 10.5, color: 'var(--text-faint)', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-            From Deriv API
-          </span>
+          <h1 className="logo-text" style={{ fontSize: 30, marginBottom: 4, fontWeight: 700, letterSpacing: 0.5 }}>NEXORA FOREX</h1>
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginTop: 26 }}>
@@ -167,6 +153,21 @@ export default function LoginPage() {
 
         <div style={{ marginTop: 30, textAlign: 'center' }}>
           <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
+        </div>
+
+        {/* Badge / logótipo da Deriv — no final de tudo */}
+        <div style={derivBadgeStyle}>
+          <div style={derivLogoBoxStyle}>
+            <img
+              src={derivLogo}
+              alt="Deriv"
+              style={{ maxWidth: '70%', maxHeight: '70%', objectFit: 'contain', opacity: 0.9 }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+            />
+          </div>
+          <span style={{ fontSize: 10.5, color: 'var(--text-faint)', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+            From Deriv API
+          </span>
         </div>
       </div>
     </div>
@@ -263,7 +264,7 @@ const flagBtnStyle = (active: boolean): React.CSSProperties => ({
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
   backdropFilter: 'blur(10px)',
-  border: active ? '1px solid rgba(255,255,255,0.25)' : '1px solid rgba(255,255,255,0.08)',
+  border: 'none',
   cursor: 'pointer', transition: 'all 0.2s ease',
   boxShadow: active ? '0 0 0 3px rgba(24,87,255,0.15)' : 'none',
 })
@@ -282,14 +283,14 @@ const cardStyle: React.CSSProperties = {
 
 const derivBadgeStyle: React.CSSProperties = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-  marginTop: 18,
+  marginTop: 28,
 }
 
 const derivLogoBoxStyle: React.CSSProperties = {
-  width: 44, height: 44, borderRadius: 12,
+  width: 44, height: 44,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.06)',
+  background: 'transparent',
+  border: 'none',
 }
 
 const cleanInputStyle: React.CSSProperties = {
