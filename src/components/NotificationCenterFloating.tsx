@@ -14,6 +14,16 @@ interface Props {
   notifications: AppNotification[]
   onMarkAllRead?: () => void
   onNotificationClick?: (n: AppNotification) => void
+  // ── NOVO: modo controlado ────────────────────────────────
+  // Se `open` for passado, o componente deixa de gerir o próprio
+  // estado de abertura — quem usa o componente controla via
+  // `onOpenChange`. Sem isso, comportamento 100% igual ao anterior
+  // (self-contained, com o próprio sino fixo no canto).
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  // Esconde o botão-sino embutido — usado quando o gatilho de
+  // abertura já está noutro lugar (ex: badge sobre o botão MENU).
+  hideBellTrigger?: boolean
 }
 
 // ── Ícones inline (sem emoji) ───────────────────────────────
@@ -37,38 +47,51 @@ function IconMegaphone() {
 // Painel central flutuante em vidro "tipo água": transparente, com blur
 // forte (deixa o dashboard por trás visível e distorcido, como se fosse
 // vidro molhado) e um reflexo subtil por baixo do painel.
-export default function NotificationCenterFloating({ notifications, onMarkAllRead, onNotificationClick }: Props) {
-  const [isOpen, setIsOpen] = useState(false)
+export default function NotificationCenterFloating({
+  notifications, onMarkAllRead, onNotificationClick,
+  open, onOpenChange, hideBellTrigger,
+}: Props) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = open !== undefined
+  const isOpen = isControlled ? open : internalOpen
+  const setIsOpen = (v: boolean) => {
+    onOpenChange?.(v)
+    if (!isControlled) setInternalOpen(v)
+  }
   const unreadCount = notifications.filter((n) => !n.read).length
 
   return (
     <>
       <style>{GLASS_REFLECT_CSS}</style>
 
-      {/* Botão de abertura — fixo, canto superior */}
-      <button
-        onClick={() => setIsOpen(true)}
-        aria-label="Abrir notificações"
-        style={{
-          position: 'fixed', top: 18, right: 18, zIndex: 40,
-          width: 44, height: 44, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(14,16,19,0.6)', border: '1px solid var(--border)',
-          backdropFilter: 'blur(14px) saturate(150%)', WebkitBackdropFilter: 'blur(14px) saturate(150%)',
-          cursor: 'pointer', color: 'var(--text-dim)',
-        }}
-      >
-        <IconBell />
-        {unreadCount > 0 && (
-          <span style={{
-            position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9,
-            background: 'var(--red-hi)', color: '#fff', fontSize: 10, fontWeight: 700,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
-          }}>
-            {unreadCount}
-          </span>
-        )}
-      </button>
+      {/* Botão de abertura próprio — fixo, canto superior.
+          Escondido quando `hideBellTrigger` for true (o gatilho
+          vive noutro lugar, ex: badge sobre o botão MENU). */}
+      {!hideBellTrigger && (
+        <button
+          onClick={() => setIsOpen(true)}
+          aria-label="Abrir notificações"
+          style={{
+            position: 'fixed', top: 18, right: 18, zIndex: 40,
+            width: 44, height: 44, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(14,16,19,0.6)', border: '1px solid var(--border)',
+            backdropFilter: 'blur(14px) saturate(150%)', WebkitBackdropFilter: 'blur(14px) saturate(150%)',
+            cursor: 'pointer', color: 'var(--text-dim)',
+          }}
+        >
+          <IconBell />
+          {unreadCount > 0 && (
+            <span style={{
+              position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9,
+              background: 'var(--red-hi)', color: '#fff', fontSize: 10, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+            }}>
+              {unreadCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {isOpen && (
         <div
