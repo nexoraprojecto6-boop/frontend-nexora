@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { BotsProvider } from '../context/BotsContext'
@@ -8,7 +8,32 @@ import { ControlsSection } from '../components/ControlsSection'
 import { TradesTable } from '../components/TradesTable'
 import { Footer } from '../components/Footer'
 import { NotificationBar } from '../components/NotificationBar'
+import NotificationCenterFloating from '../components/NotificationCenterFloating'
 import { useLoader } from '../context/LoaderContext'
+import { useNotifications } from '../hooks/useNotifications'
+
+// Formata "há X min/h/dias" a partir de um timestamp — só usado
+// para o campo `time` exibido no modal de notificações.
+function formatRelative(ts: number): string {
+  const diffMs = Date.now() - ts
+  const min = Math.floor(diffMs / 60_000)
+  if (min < 1) return 'agora mesmo'
+  if (min < 60) return `há ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `há ${h}h`
+  const d = Math.floor(h / 24)
+  return `há ${d}d`
+}
+
+// Ícone de sino pequeno para o badge sobre o botão MENU
+function IconBellSmall() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
 
 // ── DashboardLoader exibido enquanto o auth ainda carrega ─────
 function DashboardLoader() {
@@ -46,6 +71,8 @@ function DashboardInner() {
   const navigate = useNavigate()
   const { isLoading: authLoading } = useAuth()
   const { show, complete } = useLoader()
+  const { notifications, hasUnread, markAllRead } = useNotifications()
+  const [notifOpen, setNotifOpen] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -69,11 +96,46 @@ function DashboardInner() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="logo-text" style={{ fontSize: 16 }}>NEXORA FOREX</span>
         </div>
-        <button onClick={() => { show('A carregar...'); navigate('/menu') }}
-          style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>
-          MENU
-        </button>
+
+        {/* Botão MENU + sino de notificação sobreposto no canto ── */}
+        <div style={{ position: 'relative', display: 'flex' }}>
+          <button onClick={() => { show('A carregar...'); navigate('/menu') }}
+            style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>
+            MENU
+          </button>
+          {hasUnread && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setNotifOpen(true) }}
+              aria-label="Notificações"
+              style={{
+                position: 'absolute', top: -9, right: -13, width: 19, height: 19, borderRadius: '50%',
+                background: 'var(--red-hi)', color: '#fff', border: '2px solid var(--bg-elevated)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                cursor: 'pointer', boxShadow: '0 2px 8px rgba(233,32,63,0.5)',
+              }}
+            >
+              <IconBellSmall />
+            </button>
+          )}
+        </div>
       </header>
+
+      {/* Modal glass de notificações — o gatilho é o sino acima,
+          por isso `hideBellTrigger` (não mostra o botão fixo próprio) */}
+      <NotificationCenterFloating
+        hideBellTrigger
+        open={notifOpen}
+        onOpenChange={(v) => {
+          setNotifOpen(v)
+          if (v) markAllRead()
+        }}
+        notifications={notifications.map((n) => ({
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          time: formatRelative(n.createdAt),
+        }))}
+      />
 
       {/* ── Desktop layout (≥1024px): chart+controls à esquerda, trades à direita ──
           Mobile (<1024px): ordem controlada via CSS (order), ver <style> abaixo.
