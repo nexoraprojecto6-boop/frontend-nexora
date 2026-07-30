@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLoader } from '../context/LoaderContext'
 import { api, DerivTokenExpiredError } from '../lib/api'
 import type { AdminStats, AdminUserRow, MarkupStatisticsData } from '../lib/api'
+import type { AdminNotification } from '../lib/types'
 
 type Tab = 'todos' | 'nao_verificados' | 'bloqueados' | 'online' | 'novos_hoje' | 'inativos'
 type CommissionFilterMode = 'mes' | 'intervalo'
@@ -79,6 +80,24 @@ function IconUsers2() {
     </svg>
   )
 }
+function IconBellSmall() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+function IconTrash() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" /><path d="M14 11v6" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  )
+}
 
 function StatCard({ label, value, color }: { label: string; value: number | string; color?: string }) {
   return (
@@ -112,6 +131,15 @@ export default function AdminPage() {
   const [markupError, setMarkupError] = useState<string | null>(null)
   const [markupTokenExpired, setMarkupTokenExpired] = useState(false)
 
+  // ── Gestão de notificações (broadcast) ──────────────────────
+  const [notifList, setNotifList] = useState<AdminNotification[]>([])
+  const [notifLoading, setNotifLoading] = useState(false)
+  const [notifTitle, setNotifTitle] = useState('')
+  const [notifMessage, setNotifMessage] = useState('')
+  const [notifSending, setNotifSending] = useState(false)
+  const [notifError, setNotifError] = useState<string | null>(null)
+  const [notifDeletingId, setNotifDeletingId] = useState<string | null>(null)
+
   const todayDate = useMemo(() => new Date(), [])
   const [filterMode, setFilterMode] = useState<CommissionFilterMode>('mes')
   const [selMonth, setSelMonth] = useState(todayDate.getMonth() + 1)
@@ -135,6 +163,7 @@ export default function AdminPage() {
     if (!isAdmin) { navigate('/menu'); return }
     loadAll()
     loadMarkup()
+    loadNotifications()
   }, [localUser])
 
   const loadAll = async () => {
@@ -176,6 +205,48 @@ export default function AdminPage() {
       setMarkup(null)
     } finally {
       setMarkupLoading(false)
+    }
+  }
+
+  const loadNotifications = async () => {
+    setNotifLoading(true)
+    try {
+      const res = await api.getAdminNotifications()
+      setNotifList([...res.notifications].sort((a, b) => b.createdAt - a.createdAt))
+    } catch (err) {
+      // não bloqueia o resto do painel — só mostra o erro dentro do próprio card
+      setNotifError(err instanceof Error ? err.message : 'Falha ao carregar notificações')
+    } finally {
+      setNotifLoading(false)
+    }
+  }
+
+  const handleCreateNotification = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!notifTitle.trim() || !notifMessage.trim()) return
+    setNotifSending(true)
+    setNotifError(null)
+    try {
+      await api.createNotification({ title: notifTitle.trim(), message: notifMessage.trim() })
+      setNotifTitle('')
+      setNotifMessage('')
+      await loadNotifications()
+    } catch (err) {
+      setNotifError(err instanceof Error ? err.message : 'Falha ao criar notificação')
+    } finally {
+      setNotifSending(false)
+    }
+  }
+
+  const handleDeleteNotification = async (id: string) => {
+    setNotifDeletingId(id)
+    try {
+      await api.deleteNotification(id)
+      setNotifList((prev) => prev.filter((n) => n.id !== id))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Falha ao apagar notificação')
+    } finally {
+      setNotifDeletingId(null)
     }
   }
 
@@ -252,7 +323,7 @@ export default function AdminPage() {
             </svg>
           </button>
           <h1 className="logo-text" style={{ fontSize: 18 }}>PAINEL ADMIN</h1>
-          <button onClick={() => { loadAll(); loadMarkup() }} title="Atualizar" style={{ marginLeft: 'auto', color: 'var(--text-faint)', padding: 8 }}>
+          <button onClick={() => { loadAll(); loadMarkup(); loadNotifications() }} title="Atualizar" style={{ marginLeft: 'auto', color: 'var(--text-faint)', padding: 8 }}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v5h5" /><path d="M15 12V7h-5" />
               <path d="M13.51 5.87a6 6 0 0 0-10.16 2.14" /><path d="M2.49 10.13a6 6 0 0 0 10.16-2.14" />
@@ -280,6 +351,79 @@ export default function AdminPage() {
             <StatCard label="Nunca entraram" value={stats.neverLoggedIn} />
           </div>
         )}
+
+        {/* ═══════════════ Notificações (broadcast) ═══════════════ */}
+        <div className="card" style={{ padding: 0, marginBottom: 20, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'flex', color: 'var(--text-dim)' }}><IconBellSmall /></span>
+            <div>
+              <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Notificações</p>
+              <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Enviadas para todos os utilizadores, visíveis no sino sobre o botão MENU</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateNotification} style={{ padding: 18, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <input
+              type="text"
+              placeholder="Título"
+              value={notifTitle}
+              onChange={(e) => setNotifTitle(e.target.value)}
+              maxLength={80}
+              className="btn-ghost"
+              style={{ padding: '10px 12px', fontSize: 13.5, width: '100%' }}
+            />
+            <textarea
+              placeholder="Mensagem"
+              value={notifMessage}
+              onChange={(e) => setNotifMessage(e.target.value)}
+              maxLength={400}
+              rows={3}
+              className="btn-ghost"
+              style={{ padding: '10px 12px', fontSize: 13.5, width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
+            />
+            {notifError && <p style={{ color: 'var(--red-hi)', fontSize: 12 }}>{notifError}</p>}
+            <button
+              type="submit"
+              disabled={notifSending || !notifTitle.trim() || !notifMessage.trim()}
+              className="btn-primary"
+              style={{ padding: '10px 20px', fontSize: 13, fontWeight: 600, alignSelf: 'flex-end', opacity: notifSending ? 0.6 : 1 }}
+            >
+              {notifSending ? 'A enviar…' : 'Enviar notificação'}
+            </button>
+          </form>
+
+          <div>
+            {notifLoading && notifList.length === 0 ? (
+              <p style={{ padding: '20px 18px', color: 'var(--text-faint)', fontSize: 12.5 }}>A carregar…</p>
+            ) : notifList.length === 0 ? (
+              <p style={{ padding: '20px 18px', color: 'var(--text-faint)', fontSize: 12.5 }}>Nenhuma notificação enviada ainda.</p>
+            ) : (
+              notifList.map((n, idx) => (
+                <div key={n.id} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 18px',
+                  borderBottom: idx < notifList.length - 1 ? '1px solid var(--border)' : 'none',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ color: 'var(--white)', fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>{n.title}</p>
+                    <p style={{ color: 'var(--text-dim)', fontSize: 12.5, lineHeight: 1.4, marginBottom: 4 }}>{n.message}</p>
+                    <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>{formatDate(n.createdAt)}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteNotification(n.id)}
+                    disabled={notifDeletingId === n.id}
+                    aria-label="Apagar notificação"
+                    style={{
+                      flexShrink: 0, padding: 8, borderRadius: 8, color: 'var(--red-hi)',
+                      opacity: notifDeletingId === n.id ? 0.5 : 1,
+                    }}
+                  >
+                    <IconTrash />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
 
         {/* ═══════════════ Relatório de Comissão ═══════════════ */}
         <div className="card" style={{ padding: 0, marginBottom: 20, overflow: 'hidden' }}>
