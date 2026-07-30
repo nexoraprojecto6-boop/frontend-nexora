@@ -9,6 +9,7 @@ import { TradesTable } from '../components/TradesTable'
 import { Footer } from '../components/Footer'
 import { NotificationBar } from '../components/NotificationBar'
 import NotificationCenterFloating from '../components/NotificationCenterFloating'
+import { DepositModal } from '../components/DepositModal'
 import { useLoader } from '../context/LoaderContext'
 import { useNotifications } from '../hooks/useNotifications'
 
@@ -73,6 +74,7 @@ function DashboardInner() {
   const { show, complete } = useLoader()
   const { notifications, hasUnread, markAllRead } = useNotifications()
   const [notifOpen, setNotifOpen] = useState(false)
+  const [depositOpen, setDepositOpen] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -97,26 +99,41 @@ function DashboardInner() {
           <span className="logo-text" style={{ fontSize: 16 }}>NEXORA FOREX</span>
         </div>
 
-        {/* Botão MENU + sino de notificação sobreposto no canto ── */}
-        <div style={{ position: 'relative', display: 'flex' }}>
-          <button onClick={() => { show('A carregar...'); navigate('/menu') }}
-            style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>
-            MENU
+        {/* Botão DEPOSITAR + Botão MENU + sino de notificação sobreposto no canto ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setDepositOpen(true)}
+            style={{
+              padding: '6px 12px', borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'rgba(24,87,255,0.10)',
+              color: 'var(--blue-hi)', fontWeight: 700, fontSize: 12, letterSpacing: 0.5,
+              cursor: 'pointer',
+            }}
+          >
+            DEPOSITAR
           </button>
-          {hasUnread && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setNotifOpen(true) }}
-              aria-label="Notificações"
-              style={{
-                position: 'absolute', top: -9, right: -13, width: 19, height: 19, borderRadius: '50%',
-                background: 'var(--red-hi)', color: '#fff', border: '2px solid var(--bg-elevated)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-                cursor: 'pointer', boxShadow: '0 2px 8px rgba(233,32,63,0.5)',
-              }}
-            >
-              <IconBellSmall />
+
+          <div style={{ position: 'relative', display: 'flex' }}>
+            <button onClick={() => { show('A carregar...'); navigate('/menu') }}
+              style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>
+              MENU
             </button>
-          )}
+            {hasUnread && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setNotifOpen(true) }}
+                aria-label="Notificações"
+                style={{
+                  position: 'absolute', top: -9, right: -13, width: 19, height: 19, borderRadius: '50%',
+                  background: 'var(--red-hi)', color: '#fff', border: '2px solid var(--bg-elevated)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                  cursor: 'pointer', boxShadow: '0 2px 8px rgba(233,32,63,0.5)',
+                }}
+              >
+                <IconBellSmall />
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -136,6 +153,9 @@ function DashboardInner() {
           time: formatRelative(n.createdAt),
         }))}
       />
+
+      {/* Modal glass de depósito/transferência/levantamento — abre no centro do dashboard */}
+      <DepositModal open={depositOpen} onClose={() => setDepositOpen(false)} />
 
       {/* ── Desktop layout (≥1024px): chart+controls à esquerda, trades à direita ──
           Mobile (<1024px): ordem controlada via CSS (order), ver <style> abaixo.
