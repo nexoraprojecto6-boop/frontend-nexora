@@ -124,6 +124,16 @@ export interface AccountLabels {
   demoLabel: string
 }
 
+// ── Notificações (broadcast, geridas no painel admin) ─────────
+// Sem estado de "lida" por utilizador no backend — o frontend
+// controla isso via localStorage (ver hooks/useNotifications.ts).
+export interface AdminNotification {
+  id: string
+  title: string
+  message: string
+  createdAt: number
+}
+
 export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 // ─── Campos de configuração de estratégia (UI) ───────────────
