@@ -3,7 +3,7 @@
 // ============================================================
 
 import { API_BASE_URL, DERIV_APP_ID } from './env'
-import type { Account, AccountLabels } from './types'
+import type { Account, AccountLabels, AdminNotification } from './types'
 
 export interface Strategy {
   id: string
@@ -104,6 +104,15 @@ export interface RegisterPayload {
   whatsapp: string
   email: string
   password: string
+}
+
+// Re-exportado para quem importa o tipo a partir de '../lib/api'
+// (mantém compatibilidade com o padrão já usado no resto do ficheiro).
+export type { AdminNotification }
+
+export interface CreateNotificationPayload {
+  title: string
+  message: string
 }
 
 function getToken(): string | null {
@@ -278,6 +287,30 @@ export const api = {
       throw new Error(data?.message || data?.error || `HTTP ${res.status}`)
     }
     return data
+  },
+
+  // ── Notificações (broadcast, geridas no painel admin) ──────
+  // Endpoint de leitura usado pelo dashboard (todos os utilizadores
+  // autenticados) — devolve a lista completa; o "lido/não lido" é
+  // controlado no frontend via localStorage (ver hooks/useNotifications.ts).
+  async getNotifications(): Promise<{ success: boolean; notifications: AdminNotification[] }> {
+    return fetchWithLocalAuth('/api/notifications')
+  },
+
+  // ── Admin: gestão de notificações ──────────────────────────
+  async getAdminNotifications(): Promise<{ success: boolean; notifications: AdminNotification[] }> {
+    return fetchWithLocalAuth('/api/admin/notifications')
+  },
+
+  async createNotification(payload: CreateNotificationPayload): Promise<{ success: boolean; notification: AdminNotification }> {
+    return fetchWithLocalAuth('/api/admin/notifications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async deleteNotification(id: string): Promise<{ success: boolean }> {
+    return fetchWithLocalAuth(`/api/admin/notifications/${id}`, { method: 'DELETE' })
   },
 
   // ── Contas / trading (inalterado) ─────────────────────────
