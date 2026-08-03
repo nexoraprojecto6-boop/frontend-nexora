@@ -49,7 +49,7 @@ export default function ConnectDerivPage() {
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <h1 style={{ fontSize: 22, marginBottom: 8, color: '#fdeceb' }}>Conectar à Deriv</h1>
           <p style={{ color: 'rgba(253,236,235,0.65)', fontSize: 13.5, lineHeight: 1.6 }}>
-            A tua conta Sinistro X já está ativa. Falta ligar a tua conta Deriv para começares a negociar.
+            A tua conta nexora já está ativa. Falta ligar a tua conta Deriv para começares a negociar.
           </p>
         </div>
         <button onClick={handleConnect} disabled={isConnecting} style={{ ...bloodButton, opacity: isConnecting ? 0.7 : 1 }}>
