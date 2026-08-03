@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-
 // ============================================================
-// NEXORA — Vídeo-aulas das estratégias
+// SINISTRO X — Vídeo-aulas das estratégias
 //
 // Edita esta lista para adicionar/remover aulas. O "videoId" é a
 // parte do link do YouTube depois de "v=" — por exemplo, no link
@@ -10,6 +9,9 @@ import { useNavigate } from 'react-router-dom'
 //
 // Os vídeos ficam embutidos via <iframe> do YouTube (embed oficial),
 // por isso o utilizador assiste sem sair da app.
+//
+// Lista vazia propositadamente — aguarda integração futura dos
+// vídeos reais.
 // ============================================================
 interface Lesson {
   id: string
@@ -17,32 +19,10 @@ interface Lesson {
   description?: string
   videoId: string
 }
-
-const LESSONS: Lesson[] = [
-  {
-    id: '1',
-    title: 'Introdução à plataforma NEXORA',
-    description: 'Como configurar a tua primeira estratégia.',
-    videoId: 'dQw4w9WgXcQ', // ← troca por um videoId real
-  },
-  {
-    id: '2',
-    title: 'Estratégia Martingale — como funciona',
-    description: 'Entenda a lógica de recuperação e os riscos envolvidos.',
-    videoId: 'dQw4w9WgXcQ', // ← troca por um videoId real
-  },
-  {
-    id: '3',
-    title: 'Estratégia Scalper — trades rápidos',
-    description: 'Como configurar parâmetros para operações de curta duração.',
-    videoId: 'dQw4w9WgXcQ', // ← troca por um videoId real
-  },
-]
-
+const LESSONS: Lesson[] = []
 export default function VideoLessonsPage() {
   const navigate = useNavigate()
   const goBack = () => navigate('/menu')
-
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       <div style={{ position: 'sticky', top: 0, background: 'rgba(7,11,20,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', zIndex: 10 }}>
@@ -55,7 +35,6 @@ export default function VideoLessonsPage() {
           <h1 className="logo-text" style={{ fontSize: 18 }}>APRENDE A OPERAR</h1>
         </div>
       </div>
-
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 12px 40px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {LESSONS.map((lesson) => (
           <div key={lesson.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -76,7 +55,6 @@ export default function VideoLessonsPage() {
             </div>
           </div>
         ))}
-
         {LESSONS.length === 0 && (
           <div className="card" style={{ padding: 32, textAlign: 'center' }}>
             <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>Ainda não há vídeo-aulas disponíveis.</p>
