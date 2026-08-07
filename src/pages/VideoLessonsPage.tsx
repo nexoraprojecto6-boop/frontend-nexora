@@ -22,7 +22,7 @@ interface Lesson {
 const LESSONS: Lesson[] = [
   {
     id: 'aula-1',
-    title: 'Introdução à SINISTRO X',
+    title: 'Introdução à NEXORA FOREX by DERIV',
     description: 'Conhece a plataforma e aprende a abrir as tuas primeiras operações na Deriv.',
     videoId: 'PVITi2GBLII',
   },
