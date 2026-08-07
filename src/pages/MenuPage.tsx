@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { isSoundEnabled, setSoundEnabled, playGainSound } from '../lib/sound'
 
 const WHATSAPP = '976289984'
+const MENTORIA_VIP_LINK = 'https://chat.whatsapp.com/GaFZpRc5w7C4uX8rusX4bO'
 
 // ============================================================
 // Contagem de "online" SIMULADA (não vem do backend).
@@ -43,14 +44,11 @@ function saveSimulatedOnline(value: number) {
 }
 
 function nextSimulatedOnline(current: number): number {
-  // 65% sobe (1 a 4), 20% mantém, 15% desce (1 a 2) — tendência
-  // de crescimento com oscilação natural, como visto num contador
-  // real de utilizadores online.
   const roll = Math.random()
   let delta: number
-  if (roll < 0.65) delta = 1 + Math.floor(Math.random() * 4) // +1 a +4
+  if (roll < 0.65) delta = 1 + Math.floor(Math.random() * 4)
   else if (roll < 0.85) delta = 0
-  else delta = -(1 + Math.floor(Math.random() * 2)) // -1 a -2
+  else delta = -(1 + Math.floor(Math.random() * 2))
 
   let next = current + delta
   if (next < ONLINE_MIN) next = ONLINE_MIN + Math.floor(Math.random() * 5)
@@ -136,19 +134,15 @@ export default function MenuPage() {
     const next = !soundOn
     setSoundOn(next)
     setSoundEnabled(next)
-    if (next) playGainSound() // dá um preview do som ao ligar
+    if (next) playGainSound()
   }
 
-  // O role vem do token de sessão local (login com email + senha),
-  // não do check antigo por conta Deriv — reflete diretamente
-  // ADMIN_EMAILS do backend.
   const isAdmin = localUser?.role === 'admin'
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) { navigate('/'); return }
 
-    // Contagem simulada — ver funções no topo do ficheiro.
     setOnlineCount(loadSimulatedOnline())
     loadData()
 
@@ -158,7 +152,7 @@ export default function MenuPage() {
         saveSimulatedOnline(next)
         return next
       })
-    }, 4000 + Math.random() * 4000) // a cada 4–8s, para não parecer um timer perfeito
+    }, 4000 + Math.random() * 4000)
 
     return () => clearInterval(iv)
   }, [])
@@ -174,13 +168,6 @@ export default function MenuPage() {
   const handleLogout = async () => { show('A sair...'); await logout() }
   const goToAdmin = () => { show('A carregar painel admin...'); navigate('/admin') }
 
-  // ── Navegação com loader curto e rápido ─────────────────────
-  // Usado tanto aqui (botão "Aprende a Operar") quanto no
-  // ControlsSection (botão "Vídeo Aula") — ambos abrem a MESMA
-  // rota /aprender-a-operar. O loader aparece e já é fechado logo
-  // a seguir (sem await, sem delay artificial), só para dar um
-  // feedback visual instantâneo de que algo aconteceu, sem
-  // travar a navegação.
   const goToAprenderAOperar = () => {
     show('A abrir aula...')
     navigate('/aprender-a-operar')
@@ -238,15 +225,6 @@ export default function MenuPage() {
           )}
         </div>
 
-        {/* Botão Admin — só aparece para quem tem role 'admin' */}
-        {isAdmin && (
-          <div className="card" style={{ marginBottom: 12, padding: 8 }}>
-            <MenuItem onClick={goToAdmin}
-              icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
-              label="PAINEL ADMIN" color="#f5a623" />
-          </div>
-        )}
-
         {/* Secção principal */}
         <div className="card" style={{ marginBottom: 12, padding: 8 }}>
           <MenuItem onClick={() => { show('A carregar...'); navigate('/dashboard') }}
@@ -263,9 +241,13 @@ export default function MenuPage() {
             icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422A12.083 12.083 0 0119 15.5V19a1 1 0 01-1 1H6a1 1 0 01-1-1v-3.5a12.083 12.083 0 011.84-4.922L12 14z" /></svg>}
             label="APRENDE A OPERAR" color="#f5a623" />
           <MenuItem
-            href={`https://wa.me/${WHATSAPP}?text=Ol%C3%A1%2C%20quero%20saber%20mais%20sobre%20a%20Mentoria%20VIP`}
+            href={MENTORIA_VIP_LINK}
             external icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>}
             label="MENTORIA VIP WHATSAPP" color="var(--green)" />
+          <MenuItem
+            href={`https://wa.me/${WHATSAPP}?text=Ol%C3%A1%2C%20preciso%20de%20suporte`}
+            external icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-3.536-3.536a4 4 0 010-5.656M12 12h.01M6 12a6 6 0 1112 0 6 6 0 01-12 0z" /></svg>}
+            label="FALAR COM SUPORTE" color="var(--blue-hi)" />
         </div>
 
         {/* Som de ganho (gain) */}
@@ -347,7 +329,7 @@ export default function MenuPage() {
         </div>
 
         {/* Logout */}
-        <div className="card" style={{ padding: 8 }}>
+        <div className="card" style={{ marginBottom: isAdmin ? 12 : 0, padding: 8 }}>
           <button onClick={handleLogout} style={{
             width: '100%', padding: '12px 14px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12,
             background: 'transparent', cursor: 'pointer', border: 'none',
@@ -360,6 +342,15 @@ export default function MenuPage() {
             <span style={{ color: 'var(--red-hi)', fontSize: 14, fontWeight: 600 }}>SAIR</span>
           </button>
         </div>
+
+        {/* Botão Admin — movido para o fim da página, só aparece para quem tem role 'admin' */}
+        {isAdmin && (
+          <div className="card" style={{ padding: 8 }}>
+            <MenuItem onClick={goToAdmin}
+              icon={<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
+              label="PAINEL ADMIN" color="#f5a623" />
+          </div>
+        )}
       </div>
     </div>
   )
