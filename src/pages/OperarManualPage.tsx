@@ -22,6 +22,24 @@
 //     seguindo o mesmo padrão do DashboardPage.tsx. Assume que
 //     <TradingProvider/> já envolve as rotas mais acima (tal
 //     como acontece para o Dashboard).
+//
+// ALTERAÇÃO (responsividade — layout sem scroll de página):
+//   - A página ocupa exactamente 100dvh e não rola. Apenas o
+//     bloco de histórico de trades (<TradesTable/>) tem scroll
+//     interno, via CSS grid + `.op-history { overflow-y:auto }`.
+//   - Desktop (>=860px): 2 colunas — esquerda (gráfico + painel
+//     de operar empilhados, minimizando altura) e direita
+//     (histórico), lado a lado, cada uma ocupando 100% da altura
+//     disponível.
+//   - Mobile / ecrãs estreitos (<860px): 1 coluna — gráfico em
+//     cima, depois o painel de operar (dígitos/duração/stake/
+//     comprar), por fim o histórico a ocupar o espaço restante
+//     com scroll próprio.
+//   - O painel de operar foi tornado mais compacto (duração,
+//     stake e botão comprar numa única linha) para caber junto
+//     ao gráfico sem empurrar o histórico para fora do ecrã.
+//   - Nenhuma lógica de dados/estado foi alterada — apenas a
+//     estrutura visual (JSX/CSS) do layout.
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -356,21 +374,23 @@ function OperarManualInner() {
   const displayError = localError ?? manualBuyError
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg, #0b0e14)', padding: 16 }}>
-      <button
-        onClick={() => navigate(-1)}
-        style={{
-          background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)',
-          borderRadius: 6, padding: '8px 14px', cursor: 'pointer', fontSize: 13, marginBottom: 14,
-        }}
-      >
-        ← Voltar ao Dashboard
-      </button>
+    <div className="op-page">
+      <div className="op-topbar">
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)',
+            borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontSize: 13,
+          }}
+        >
+          ← Voltar ao Dashboard
+        </button>
+      </div>
 
       {/* ── Saldo / P&L do dia (inclui trades manuais e de bots) ── */}
-      <div className="card" style={{
+      <div className="card op-balance-card" style={{
         display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap',
-        padding: '12px 16px', marginBottom: 14, opacity: tradingLoading ? 0.6 : 1,
+        padding: '10px 16px', opacity: tradingLoading ? 0.6 : 1,
       }}>
         <div>
           <p style={{ fontSize: 11, color: 'var(--text-dim)', margin: 0 }}>Saldo</p>
@@ -412,187 +432,269 @@ function OperarManualInner() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16 }}>
-        {/* ---------------- Gráfico + dígitos ---------------- */}
-        <div className="card">
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-            padding: '10px 14px', borderBottom: '1px solid var(--border)',
-          }}>
-            <select
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 4, padding: '6px 10px', fontSize: 13 }}
-            >
-              {SYMBOLS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: phase === 'live' ? '#3ddc84' : phase === 'error' ? '#ff5c5c' : '#e0a63d',
-            }} />
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-              {phase === 'live' ? 'Ligado' : phase === 'error' ? 'Erro' : 'A ligar…'}
-            </span>
-
-            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)' }}>
-              {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
-            </span>
-
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => setWinOpen(o => !o)}
-                style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 4, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}
+      {/* ── Corpo principal: gráfico+painel numa coluna, histórico
+          na outra (desktop) — empilhado em 1 coluna (mobile) ── */}
+      <div className="op-main">
+        <div className="op-left">
+          {/* ---------------- Gráfico + dígitos ---------------- */}
+          <div className="card op-chart-card">
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+              padding: '8px 12px', borderBottom: '1px solid var(--border)', flex: '0 0 auto',
+            }}>
+              <select
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value)}
+                style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 4, padding: '6px 10px', fontSize: 13 }}
               >
-                {win} ▾
-              </button>
-              {winOpen && (
-                <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 30, padding: 4, minWidth: 90 }}>
-                  {WINDOWS.map(w => (
-                    <button
-                      key={w}
-                      onClick={() => { setWin(w); setWinOpen(false) }}
-                      style={{ width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 6, fontSize: 13, background: 'transparent', color: win === w ? '#3ddc84' : 'var(--text)', fontWeight: win === w ? 700 : 400, cursor: 'pointer' }}
-                    >
-                      {w}
-                    </button>
-                  ))}
-                </div>
-              )}
+                {SYMBOLS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: phase === 'live' ? '#3ddc84' : phase === 'error' ? '#ff5c5c' : '#e0a63d',
+              }} />
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                {phase === 'live' ? 'Ligado' : phase === 'error' ? 'Erro' : 'A ligar…'}
+              </span>
+
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)' }}>
+                {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
+              </span>
+
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setWinOpen(o => !o)}
+                  style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 4, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}
+                >
+                  {win} ▾
+                </button>
+                {winOpen && (
+                  <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 30, padding: 4, minWidth: 90 }}>
+                    {WINDOWS.map(w => (
+                      <button
+                        key={w}
+                        onClick={() => { setWin(w); setWinOpen(false) }}
+                        style={{ width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 6, fontSize: 13, background: 'transparent', color: win === w ? '#3ddc84' : 'var(--text)', fontWeight: win === w ? 700 : 400, cursor: 'pointer' }}
+                      >
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="op-chart-bars">
+              {bars.map((pct, digit) => {
+                const color = getBarColor(pct)
+                const ratio = pct / (maxBar + 2)
+                const showResult = lastResult?.digit === digit
+                return (
+                  <div key={digit} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%', position: 'relative' }}>
+                    {showResult && lastResult && (
+                      <span
+                        key={lastResult.id}
+                        style={{
+                          position: 'absolute', top: -26, left: '50%', transform: 'translateX(-50%)',
+                          display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap',
+                          padding: '3px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 800,
+                          letterSpacing: 0.4, color: '#0b0e14',
+                          background: lastResult.won ? '#3ddc84' : '#ff5c5c',
+                          boxShadow: lastResult.won ? '0 0 12px rgba(61,220,132,0.55)' : '0 0 12px rgba(255,92,92,0.55)',
+                          animation: 'resultPop 0.35s ease-out',
+                          zIndex: 5,
+                        }}
+                      >
+                        {lastResult.won ? '✓ WIN' : '✕ LOSS'}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 11.5, color: 'var(--text)', lineHeight: 1 }}>{pct.toFixed(1)}%</span>
+                    <div style={{
+                      width: '100%', height: `${Math.min(94, Math.max(4, ratio * 100))}%`, background: color,
+                      outline: showResult ? `2px solid ${lastResult?.won ? '#3ddc84' : '#ff5c5c'}` : 'none',
+                      outlineOffset: 1,
+                    }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: showResult ? (lastResult?.won ? '#3ddc84' : '#ff5c5c') : 'var(--white)', lineHeight: 1 }}>{digit}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
-          <div style={{ padding: '26px 14px 6px', display: 'flex', alignItems: 'flex-end', gap: 6, minHeight: 246, position: 'relative' }}>
-            {bars.map((pct, digit) => {
-              const color = getBarColor(pct)
-              const ratio = pct / (maxBar + 2)
-              const showResult = lastResult?.digit === digit
-              return (
-                <div key={digit} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%', position: 'relative' }}>
-                  {showResult && lastResult && (
-                    <span
-                      key={lastResult.id}
-                      style={{
-                        position: 'absolute', top: -26, left: '50%', transform: 'translateX(-50%)',
-                        display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap',
-                        padding: '3px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 800,
-                        letterSpacing: 0.4, color: '#0b0e14',
-                        background: lastResult.won ? '#3ddc84' : '#ff5c5c',
-                        boxShadow: lastResult.won ? '0 0 12px rgba(61,220,132,0.55)' : '0 0 12px rgba(255,92,92,0.55)',
-                        animation: 'resultPop 0.35s ease-out',
-                        zIndex: 5,
-                      }}
-                    >
-                      {lastResult.won ? '✓ WIN' : '✕ LOSS'}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1 }}>{pct.toFixed(1)}%</span>
-                  <div style={{
-                    width: '100%', height: `max(4px, calc(180px * ${ratio.toFixed(4)}))`, background: color,
-                    outline: showResult ? `2px solid ${lastResult?.won ? '#3ddc84' : '#ff5c5c'}` : 'none',
-                    outlineOffset: 1,
-                  }} />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: showResult ? (lastResult?.won ? '#3ddc84' : '#ff5c5c') : 'var(--white)', lineHeight: 1 }}>{digit}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* ---------------- Painel de operação manual ---------------- */}
-        <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* ── Selector de mercado: Over / Under / Matches / Differs ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, background: 'var(--border)', borderRadius: 12, padding: 4 }}>
-            {(['over', 'under', 'matches', 'differs'] as MarketType[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setMarket(m)}
-                style={{
-                  padding: '8px 0', background: market === m ? '#3ddc84' : 'transparent',
-                  color: market === m ? '#0b0e14' : 'var(--text-dim)', border: 'none',
-                  borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                {MARKET_LABELS[m]}
-              </button>
-            ))}
-          </div>
-
-          <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: 0 }}>
-            {market === 'over' && 'O último dígito será maior que o seleccionado'}
-            {market === 'under' && 'O último dígito será menor que o seleccionado'}
-            {market === 'matches' && 'O último dígito será igual ao seleccionado'}
-            {market === 'differs' && 'O último dígito será diferente do seleccionado'}
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-            {bars.map((pct, digit) => {
-              const isSelected = digit === selectedDigit
-              const isHigh = Math.abs(pct - info.maxPct) < 0.01
-              const isLow = Math.abs(pct - info.minPct) < 0.01
-              const valid = isDigitValidForMarket(market, digit)
-              return (
+          {/* ---------------- Painel de operação manual (compacto) ---------------- */}
+          <div className="card op-panel">
+            {/* Selector de mercado: Over / Under / Matches / Differs */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, background: 'var(--border)', borderRadius: 10, padding: 4 }}>
+              {(['over', 'under', 'matches', 'differs'] as MarketType[]).map(m => (
                 <button
-                  key={digit}
-                  onClick={() => valid && setSelectedDigit(digit)}
-                  disabled={!valid}
-                  title={!valid ? 'Indisponível para este mercado' : undefined}
+                  key={m}
+                  onClick={() => setMarket(m)}
                   style={{
-                    background: 'var(--border)', border: isSelected ? '1px solid #3ddc84' : '1px solid transparent',
-                    borderRadius: 6, padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    cursor: valid ? 'pointer' : 'not-allowed', opacity: valid ? 1 : 0.35,
+                    padding: '7px 0', background: market === m ? '#3ddc84' : 'transparent',
+                    color: market === m ? '#0b0e14' : 'var(--text-dim)', border: 'none',
+                    borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
-                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--white)' }}>{digit}</span>
-                  <span style={{ fontSize: 11, marginTop: 2, color: isHigh ? '#3ddc84' : isLow ? '#ff5c5c' : 'var(--text-dim)' }}>
-                    {pct.toFixed(1)}%
-                  </span>
+                  {MARKET_LABELS[m]}
                 </button>
-              )
-            })}
+              ))}
+            </div>
+
+            <p style={{ fontSize: 11.5, color: 'var(--text-dim)', margin: '8px 0 0' }}>
+              {market === 'over' && 'O último dígito será maior que o seleccionado'}
+              {market === 'under' && 'O último dígito será menor que o seleccionado'}
+              {market === 'matches' && 'O último dígito será igual ao seleccionado'}
+              {market === 'differs' && 'O último dígito será diferente do seleccionado'}
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginTop: 8 }}>
+              {bars.map((pct, digit) => {
+                const isSelected = digit === selectedDigit
+                const isHigh = Math.abs(pct - info.maxPct) < 0.01
+                const isLow = Math.abs(pct - info.minPct) < 0.01
+                const valid = isDigitValidForMarket(market, digit)
+                return (
+                  <button
+                    key={digit}
+                    onClick={() => valid && setSelectedDigit(digit)}
+                    disabled={!valid}
+                    title={!valid ? 'Indisponível para este mercado' : undefined}
+                    style={{
+                      background: 'var(--border)', border: isSelected ? '1px solid #3ddc84' : '1px solid transparent',
+                      borderRadius: 6, padding: '7px 0', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      cursor: valid ? 'pointer' : 'not-allowed', opacity: valid ? 1 : 0.35,
+                    }}
+                  >
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--white)' }}>{digit}</span>
+                    <span style={{ fontSize: 10.5, marginTop: 1, color: isHigh ? '#3ddc84' : isLow ? '#ff5c5c' : 'var(--text-dim)' }}>
+                      {pct.toFixed(1)}%
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {displayError && <p style={{ fontSize: 12, color: '#ff5c5c', margin: '8px 0 0' }}>{displayError}</p>}
+
+            {/* Duração + Stake + Comprar numa única linha para minimizar altura */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 100px', minWidth: 90 }}>
+                <label style={{ fontSize: 11, color: 'var(--text-dim)' }}>Duração</label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 6, padding: '8px 10px', fontSize: 13, width: '100%' }}
+                >
+                  {DURATIONS.map(d => <option key={d} value={d}>{d} ticks</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 100px', minWidth: 90 }}>
+                <label style={{ fontSize: 11, color: 'var(--text-dim)' }}>Stake (USD)</label>
+                <input
+                  type="number"
+                  min={0.35}
+                  step={0.5}
+                  value={stake}
+                  onChange={(e) => setStake(Number(e.target.value))}
+                  style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 6, padding: '8px 10px', fontSize: 13, width: '100%' }}
+                />
+              </div>
+
+              <button
+                onClick={handleBuy}
+                disabled={isBusy}
+                style={{
+                  flex: '1 1 150px', minWidth: 140, background: '#3ddc84', border: 'none', borderRadius: 6,
+                  padding: '10px 0', color: '#0b0e14', fontWeight: 700, fontSize: 13,
+                  cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                }}
+              >
+                {isBusy ? 'Contrato em aberto…' : `Comprar ${MARKET_LABELS[market]}`}
+              </button>
+            </div>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>Duração</label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 6, padding: '8px 10px', fontSize: 14 }}
-            >
-              {DURATIONS.map(d => <option key={d} value={d}>{d} ticks</option>)}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>Stake (USD)</label>
-            <input
-              type="number"
-              min={0.35}
-              step={0.5}
-              value={stake}
-              onChange={(e) => setStake(Number(e.target.value))}
-              style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 6, padding: '8px 10px', fontSize: 14 }}
-            />
-          </div>
-
-          {displayError && <p style={{ fontSize: 12, color: '#ff5c5c', margin: 0 }}>{displayError}</p>}
-
-          <button
-            onClick={handleBuy}
-            disabled={isBusy}
-            style={{ marginTop: 'auto', background: '#3ddc84', border: 'none', borderRadius: 6, padding: '12px 0', color: '#0b0e14', fontWeight: 700, fontSize: 14, cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.6 : 1 }}
-          >
-            {isBusy ? 'Contrato em aberto…' : `Comprar ${MARKET_LABELS[market]}`}
-          </button>
         </div>
-      </div>
 
-      {/* ---------------- Histórico de operações ---------------- */}
-      <div style={{ marginTop: 16, height: 360 }}>
-        <TradesTable />
+        {/* ---------------- Histórico de operações (única secção com scroll) ---------------- */}
+        <div className="op-history">
+          <TradesTable />
+        </div>
       </div>
 
       <style>{`
+        .op-page {
+          height: 100dvh;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          padding: 14px;
+          box-sizing: border-box;
+          background: var(--bg, #0b0e14);
+        }
+        .op-topbar { flex: 0 0 auto; margin-bottom: 10px; }
+        .op-balance-card { flex: 0 0 auto; margin-bottom: 10px; }
+
+        .op-main {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: grid;
+          gap: 12px;
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(160px, 1fr) auto minmax(140px, 1fr);
+        }
+        .op-left { display: contents; }
+
+        .op-chart-card {
+          min-height: 0;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+        .op-chart-bars {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          align-items: flex-end;
+          gap: 6px;
+          padding: 20px 12px 6px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .op-panel {
+          min-height: 0;
+          overflow: hidden;
+          flex: 0 0 auto;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .op-history {
+          min-height: 0;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        @media (min-width: 860px) {
+          .op-main {
+            grid-template-columns: minmax(0, 1fr) 380px;
+            grid-template-rows: 1fr;
+          }
+          .op-left {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 0;
+            height: 100%;
+          }
+          .op-chart-card { flex: 1 1 auto; }
+          .op-history { height: 100%; }
+        }
+
         @keyframes resultPop {
           0%   { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.85); }
           60%  { opacity: 1; transform: translateX(-50%) translateY(-2px) scale(1.05); }
