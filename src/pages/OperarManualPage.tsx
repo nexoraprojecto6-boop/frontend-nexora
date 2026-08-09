@@ -387,26 +387,24 @@ function OperarManualInner() {
         </button>
       </div>
 
-      {/* ── Saldo / P&L do dia (inclui trades manuais e de bots) ── */}
-      <div className="card op-balance-card" style={{
-        display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap',
-        padding: '10px 16px', opacity: tradingLoading ? 0.6 : 1,
-      }}>
-        <div>
-          <p style={{ fontSize: 11, color: 'var(--text-dim)', margin: 0 }}>Saldo</p>
-          <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--white)', margin: 0 }}>
-            {balance.toFixed(2)} <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{currency}</span>
+      {/* ── Saldo / P&L do dia (inclui trades manuais e de bots) —
+          faixa fina, sempre em linha horizontal, mesmo no mobile ── */}
+      <div className="card op-balance-card" style={{ opacity: tradingLoading ? 0.6 : 1 }}>
+        <div className="op-stat">
+          <p className="op-stat-label">Saldo</p>
+          <p className="op-stat-value" style={{ color: 'var(--white)' }}>
+            {balance.toFixed(2)} <span className="op-stat-unit">{currency}</span>
           </p>
         </div>
-        <div>
-          <p style={{ fontSize: 11, color: 'var(--text-dim)', margin: 0 }}>Lucro/Prejuízo</p>
-          <p style={{ fontSize: 18, fontWeight: 800, margin: 0, color: profit >= 0 ? '#22c55e' : '#ff5c5c' }}>
+        <div className="op-stat">
+          <p className="op-stat-label">Lucro/Prejuízo</p>
+          <p className="op-stat-value" style={{ color: profit >= 0 ? '#22c55e' : '#ff5c5c' }}>
             {profit >= 0 ? '+' : ''}{profit.toFixed(2)}
           </p>
         </div>
-        <div>
-          <p style={{ fontSize: 11, color: 'var(--text-dim)', margin: 0 }}>Operações</p>
-          <p style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
+        <div className="op-stat">
+          <p className="op-stat-label">Operações</p>
+          <p className="op-stat-value">
             <span style={{ color: '#22c55e' }}>{wins}</span>
             <span style={{ color: 'var(--text-dim)' }}> / </span>
             <span style={{ color: '#e8e8ec' }}>{losses}</span>
@@ -414,19 +412,9 @@ function OperarManualInner() {
         </div>
 
         {/* ── Trocar de conta (Real/Demo) — ponta direita do card ── */}
-        <button
-          onClick={() => setShowAccSheet(true)}
-          className="btn-ghost"
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8,
-            padding: '8px 12px', borderRadius: 10, cursor: 'pointer',
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 700, color: accColor, whiteSpace: 'nowrap' }}>{accLabel}</span>
-          <span style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 22, height: 22, borderRadius: 6, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
-          }}>
+        <button onClick={() => setShowAccSheet(true)} className="btn-ghost op-acc-btn">
+          <span className="op-acc-label" style={{ color: accColor }}>{accLabel}</span>
+          <span className="op-acc-icon">
             <IconRefresh />
           </span>
         </button>
@@ -634,16 +622,61 @@ function OperarManualInner() {
           box-sizing: border-box;
           background: var(--bg, #0b0e14);
         }
-        .op-topbar { flex: 0 0 auto; margin-bottom: 10px; }
-        .op-balance-card { flex: 0 0 auto; margin-bottom: 10px; }
+        .op-topbar { flex: 0 0 auto; margin-bottom: 8px; }
+
+        /* Faixa de saldo: fina, sempre em linha (nunca quebra),
+           rola na horizontal só se realmente faltar espaço. */
+        .op-balance-card {
+          flex: 0 0 auto;
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          flex-wrap: nowrap;
+          padding: 8px 14px;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .op-balance-card::-webkit-scrollbar { display: none; }
+        .op-stat { flex: 0 0 auto; white-space: nowrap; }
+        .op-stat-label { font-size: 10.5px; color: var(--text-dim); margin: 0; line-height: 1.2; }
+        .op-stat-value { font-size: 16px; font-weight: 800; margin: 0; line-height: 1.25; }
+        .op-stat-unit { font-size: 11px; color: var(--text-dim); }
+        .op-acc-btn {
+          margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+          padding: 6px 10px; border-radius: 9px; cursor: pointer; white-space: nowrap;
+        }
+        .op-acc-label { font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .op-acc-icon {
+          display: flex; align-items: center; justify-content: center;
+          width: 20px; height: 20px; border-radius: 6px;
+          background: rgba(255,255,255,0.08); color: var(--text-dim);
+        }
 
         .op-main {
           flex: 1 1 auto;
           min-height: 0;
           display: grid;
-          gap: 12px;
+          gap: 10px;
           grid-template-columns: 1fr;
-          grid-template-rows: minmax(160px, 1fr) auto minmax(140px, 1fr);
+          grid-template-rows: minmax(150px, 0.85fr) auto minmax(160px, 1.15fr);
+        }
+
+        /* Mobile: faixa de saldo ainda mais fina — sobra mais altura
+           para o gráfico (que sobe) e para o histórico (que ganha
+           mais espaço). Continua tudo alinhado em linha horizontal. */
+        @media (max-width: 859px) {
+          .op-page { padding: 10px; }
+          .op-topbar { margin-bottom: 6px; }
+          .op-topbar button { padding: 5px 12px !important; font-size: 12px !important; }
+          .op-balance-card { padding: 6px 12px; gap: 14px; margin-bottom: 6px; }
+          .op-stat-label { font-size: 9.5px; }
+          .op-stat-value { font-size: 13.5px; }
+          .op-stat-unit { font-size: 10px; }
+          .op-acc-btn { padding: 5px 8px; }
+          .op-acc-label { font-size: 11px; }
+          .op-acc-icon { width: 18px; height: 18px; }
+          .op-main { grid-template-rows: minmax(140px, 0.8fr) auto minmax(180px, 1.2fr); }
         }
         .op-left { display: contents; }
 
