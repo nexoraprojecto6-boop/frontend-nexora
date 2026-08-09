@@ -26,9 +26,13 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { BotsProvider, useBots } from '../context/BotsContext'
 import { useTrading } from '../context/TradingContext'
+import { useAuth } from '../context/AuthContext'
+import { useLoader } from '../context/LoaderContext'
 import { TradesTable } from '../components/TradesTable'
+import { api } from '../lib/api'
 import type { ManualBuyParams } from '../hooks/useNexoraWs'
 
 const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
@@ -75,6 +79,22 @@ function isDigitValidForMarket(market: MarketType, digit: number): boolean {
   return true // matches / differs aceitam qualquer dígito 0–9
 }
 
+// ── Portal: monta o conteúdo direto no <body>, fora de qualquer
+// container com overflow/scroll — mesma solução usada no
+// ControlsSection.tsx para o sheet de troca de conta ───────────
+function Portal({ children }: { children: React.ReactNode }) {
+  return createPortal(children, document.body)
+}
+
+function IconRefresh() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" /><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  )
+}
+
 function lastDigit(q: number): number {
   const s = q.toFixed(2)
   return parseInt(s[s.length - 1], 10)
@@ -95,6 +115,43 @@ function OperarManualInner() {
   const navigate = useNavigate()
   const { manualBuy, manualPendingTrade, manualBuyError, manualTrades } = useBots()
   const { balance, currency, profit, wins, losses, loading: tradingLoading } = useTrading()
+
+  // ── Troca de conta (Real/Demo) — MESMA lógica do ControlsSection.tsx ──
+  const { accounts, currentAccount, setCurrentAccount, localUser } = useAuth()
+  const loader = useLoader()
+  const isAdmin = localUser?.role === 'admin'
+
+  const [accLabels, setAccLabels] = useState({ realLabel: 'REAL', demoLabel: 'DEMO' })
+  useEffect(() => { api.getAccountLabels().then(setAccLabels).catch(() => {}) }, [])
+
+  // Para administradores, os nomes ficam trocados/explícitos — mesma
+  // regra do ControlsSection (Demo→"Virtual"/verde, Real→"Ao Vivo"/azul).
+  const demoLabelDisplay = (isAdmin ? 'REAL' : accLabels.demoLabel).toUpperCase()
+  const realLabelDisplay = (isAdmin ? 'DEMO' : accLabels.realLabel).toUpperCase()
+  const demoColorDisplay = isAdmin ? 'var(--green)' : 'var(--blue-hi)'
+  const realColorDisplay = isAdmin ? 'var(--blue-hi)' : 'var(--green)'
+
+  const accLabel = !currentAccount ? 'Selecionar' : currentAccount.is_virtual ? demoLabelDisplay : realLabelDisplay
+  const accColor = !currentAccount ? 'var(--text-faint)' : currentAccount.is_virtual ? demoColorDisplay : realColorDisplay
+
+  const [showAccSheet, setShowAccSheet] = useState(false)
+  const [switchingAcc, setSwitchingAcc] = useState(false)
+
+  const handleAccSelectSheet = async (acc: typeof accounts[number]) => {
+    if (currentAccount?.account_id === acc.account_id) { setShowAccSheet(false); return }
+    setSwitchingAcc(true)
+    const label = acc.is_virtual ? `Conta ${demoLabelDisplay}` : `Conta ${realLabelDisplay}`
+    loader.show(`A ligar a ${label}…`)
+    try {
+      await setCurrentAccount(acc)
+      loader.complete(`${label} activa!`)
+    } catch {
+      loader.hide()
+    } finally {
+      setSwitchingAcc(false)
+      setShowAccSheet(false)
+    }
+  }
 
   // ── Sinal WIN/LOSS sobre o dígito onde a última operação
   // manual terminou. `manualTrades` vem sempre com o mais recente
@@ -335,6 +392,24 @@ function OperarManualInner() {
             <span style={{ color: '#e8e8ec' }}>{losses}</span>
           </p>
         </div>
+
+        {/* ── Trocar de conta (Real/Demo) — ponta direita do card ── */}
+        <button
+          onClick={() => setShowAccSheet(true)}
+          className="btn-ghost"
+          style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', borderRadius: 10, cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 700, color: accColor, whiteSpace: 'nowrap' }}>{accLabel}</span>
+          <span style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 22, height: 22, borderRadius: 6, background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
+          }}>
+            <IconRefresh />
+          </span>
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16 }}>
@@ -524,6 +599,42 @@ function OperarManualInner() {
           100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
         }
       `}</style>
+
+      {/* ── Sheet em vidro: Selecionar Tipo de Conta (via Portal) —
+          mesmo componente/estilo do ControlsSection.tsx ── */}
+      {showAccSheet && (
+        <Portal>
+          <div className="glass-overlay" onClick={() => !switchingAcc && setShowAccSheet(false)}>
+            <div className="glass-sheet" onClick={e => e.stopPropagation()}>
+              <div className="glass-sheet-header">
+                <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Tipo de Conta</p>
+                {!switchingAcc && (
+                  <button onClick={() => setShowAccSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+                )}
+              </div>
+              {switchingAcc ? (
+                <div className="glass-sheet-loader">
+                  <span style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--blue-hi)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                  <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>A ligar à conta…</span>
+                </div>
+              ) : (
+                <div className="glass-sheet-body">
+                  {accounts.map(a => (
+                    <button key={a.account_id}
+                      className={`glass-option ${currentAccount?.account_id === a.account_id ? 'active' : ''}`}
+                      onClick={() => handleAccSelectSheet(a)}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: a.is_virtual ? demoColorDisplay : realColorDisplay }}>
+                        {a.is_virtual ? `Conta ${demoLabelDisplay}` : `Conta ${realLabelDisplay}`}
+                      </p>
+                      <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Saldo: ${Number(a.balance ?? 0).toFixed(2)}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Portal>
+      )}
     </div>
   )
 }
