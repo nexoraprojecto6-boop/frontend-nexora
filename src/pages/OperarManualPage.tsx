@@ -93,8 +93,32 @@ function calcAll(hist: number[], win: number) {
 
 function OperarManualInner() {
   const navigate = useNavigate()
-  const { manualBuy, manualPendingTrade, manualBuyError } = useBots()
+  const { manualBuy, manualPendingTrade, manualBuyError, manualTrades } = useBots()
   const { balance, currency, profit, wins, losses, loading: tradingLoading } = useTrading()
+
+  // ── Sinal WIN/LOSS sobre o dígito onde a última operação
+  // manual terminou. `manualTrades` vem sempre com o mais recente
+  // em primeiro (ver BotsContext: `[rec, ...prev]`), por isso
+  // basta observar manualTrades[0]. Some sozinho passado um tempo.
+  const [lastResult, setLastResult] = useState<{ id: string; digit: number; won: boolean } | null>(null)
+  const lastResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const latest = manualTrades[0]
+    if (!latest || typeof latest.exitDigit !== 'number') return
+    if (lastResult?.id === latest.id) return // já mostrado, evita reiniciar o timer
+
+    setLastResult({ id: latest.id, digit: latest.exitDigit, won: latest.won })
+
+    if (lastResultTimerRef.current) clearTimeout(lastResultTimerRef.current)
+    lastResultTimerRef.current = setTimeout(() => {
+      setLastResult(prev => (prev?.id === latest.id ? null : prev))
+    }, 6000)
+  }, [manualTrades]) // eslint-disable-line
+
+  useEffect(() => {
+    return () => { if (lastResultTimerRef.current) clearTimeout(lastResultTimerRef.current) }
+  }, [])
 
   // ── Estado do gráfico / dígitos (idêntico ao ChartSection) ──
   const [symbol, setSymbol] = useState('1HZ100V')
@@ -363,15 +387,37 @@ function OperarManualInner() {
             </div>
           </div>
 
-          <div style={{ padding: '10px 14px 6px', display: 'flex', alignItems: 'flex-end', gap: 6, minHeight: 220 }}>
+          <div style={{ padding: '26px 14px 6px', display: 'flex', alignItems: 'flex-end', gap: 6, minHeight: 246, position: 'relative' }}>
             {bars.map((pct, digit) => {
               const color = getBarColor(pct)
               const ratio = pct / (maxBar + 2)
+              const showResult = lastResult?.digit === digit
               return (
-                <div key={digit} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%' }}>
+                <div key={digit} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%', position: 'relative' }}>
+                  {showResult && lastResult && (
+                    <span
+                      key={lastResult.id}
+                      style={{
+                        position: 'absolute', top: -26, left: '50%', transform: 'translateX(-50%)',
+                        display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap',
+                        padding: '3px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 800,
+                        letterSpacing: 0.4, color: '#0b0e14',
+                        background: lastResult.won ? '#3ddc84' : '#ff5c5c',
+                        boxShadow: lastResult.won ? '0 0 12px rgba(61,220,132,0.55)' : '0 0 12px rgba(255,92,92,0.55)',
+                        animation: 'resultPop 0.35s ease-out',
+                        zIndex: 5,
+                      }}
+                    >
+                      {lastResult.won ? '✓ WIN' : '✕ LOSS'}
+                    </span>
+                  )}
                   <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1 }}>{pct.toFixed(1)}%</span>
-                  <div style={{ width: '100%', height: `max(4px, calc(180px * ${ratio.toFixed(4)}))`, background: color }} />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--white)', lineHeight: 1 }}>{digit}</span>
+                  <div style={{
+                    width: '100%', height: `max(4px, calc(180px * ${ratio.toFixed(4)}))`, background: color,
+                    outline: showResult ? `2px solid ${lastResult?.won ? '#3ddc84' : '#ff5c5c'}` : 'none',
+                    outlineOffset: 1,
+                  }} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: showResult ? (lastResult?.won ? '#3ddc84' : '#ff5c5c') : 'var(--white)', lineHeight: 1 }}>{digit}</span>
                 </div>
               )
             })}
@@ -470,6 +516,14 @@ function OperarManualInner() {
       <div style={{ marginTop: 16, height: 360 }}>
         <TradesTable />
       </div>
+
+      <style>{`
+        @keyframes resultPop {
+          0%   { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.85); }
+          60%  { opacity: 1; transform: translateX(-50%) translateY(-2px) scale(1.05); }
+          100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
+      `}</style>
     </div>
   )
 }
