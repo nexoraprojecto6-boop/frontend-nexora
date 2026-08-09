@@ -1,5 +1,9 @@
 // ============================================================
 // NEXORA FOREX — Bots Context
+//
+// ALTERAÇÃO (Operar Manual): adicionado estado e método para
+// compra manual de contratos (fora do sistema de bots), usando
+// o mesmo `useNexoraWs` — sem segunda ligação WS.
 // ============================================================
 
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react'
@@ -7,7 +11,7 @@ import type {
   BotSummary, BotState, BotEvent, BotLogEntry, BotStats, BotConfig,
   BotStrategyType, TradeClosedPayload, TradeOpenedPayload, CatalogBot, WsStatus,
 } from '../lib/types'
-import { useNexoraWs } from '../hooks/useNexoraWs'
+import { useNexoraWs, ManualBuyParams, ManualBuyResult, ManualTradeClosed } from '../hooks/useNexoraWs'
 import { useAuth } from './AuthContext'
 import { useTrading } from './TradingContext'
 import type { Trade } from './TradingContext'
@@ -27,6 +31,20 @@ export interface TradeRecord {
   direction?: string
   contractType?: string
   exitTick?: number
+  exitDigit?: number
+}
+
+// ── NOVO: registo de trade manual (mesma forma do TradeRecord,
+// mas sem botId real — usamos 'manual' como marcador) ─────────
+export interface ManualTradeRecord {
+  id: string
+  hora: string
+  stake: number
+  profit: number
+  won: boolean
+  timestamp: number
+  pending: boolean
+  contractType: string
   exitDigit?: number
 }
 
@@ -54,6 +72,11 @@ interface BotsCtx {
   adminAddCatalogBot: (dto: { name: string; description: string; strategy: BotStrategyType; defaultConfig: BotConfig; tags?: string[]; isActive?: boolean }) => void
   adminRemoveCatalogBot: (id: string) => void
   adminUpdateCatalogBot: (id: string, updates: Record<string, unknown>) => void
+  // ── NOVO ──────────────────────────────────────────────────
+  manualBuy: (params: ManualBuyParams) => void
+  manualPendingTrade: ManualTradeRecord | null
+  manualTrades: ManualTradeRecord[]
+  manualBuyError: string | null
 }
 
 const Ctx = createContext<BotsCtx | null>(null)
@@ -65,6 +88,7 @@ export function useBots() {
 }
 
 const MAX_TRADES = 300
+const MAX_MANUAL_TRADES = 100
 
 export function BotsProvider({ children }: { children: ReactNode }) {
   const { isLoading, currentAccount } = useAuth()
@@ -89,6 +113,11 @@ export function BotsProvider({ children }: { children: ReactNode }) {
   const [botLogs, setBotLogs] = useState<Record<string, BotLogEntry[]>>({})
   const [lastError, setLastError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<{ text: string; kind: 'success' | 'warning' | 'error' } | null>(null)
+
+  // ── NOVO: estado de trading manual ─────────────────────────
+  const [manualPendingTrade, setManualPendingTrade] = useState<ManualTradeRecord | null>(null)
+  const [manualTrades, setManualTrades] = useState<ManualTradeRecord[]>([])
+  const [manualBuyError, setManualBuyError] = useState<string | null>(null)
 
   const sessionBotsRef = useRef<BotSummary[]>([])
   const getBotMeta = (botId: string) => {
@@ -129,6 +158,47 @@ export function BotsProvider({ children }: { children: ReactNode }) {
   const handleTick = useCallback((quote: number) => {
     trading._setTick(quote)
   }, [trading._setTick])
+
+  // ── NOVO: handlers de compra manual ────────────────────────
+  const handleManualBuyResult = useCallback((result: ManualBuyResult) => {
+    if (!result.success) {
+      setManualBuyError(result.error ?? 'Não foi possível abrir o contrato.')
+      setTimeout(() => setManualBuyError(null), 6000)
+      return
+    }
+    setManualPendingTrade({
+      id: result.contractId ?? `manual_${Date.now()}`,
+      hora: new Date().toLocaleTimeString('pt-PT'),
+      stake: 0, // atualizado quando o trade fechar (backend devolve o stake real no fecho)
+      profit: 0,
+      won: false,
+      timestamp: Date.now(),
+      pending: true,
+      contractType: '',
+    })
+  }, [])
+
+  const handleManualTradeClosed = useCallback((closed: ManualTradeClosed) => {
+    const rec: ManualTradeRecord = {
+      id: closed.contractId,
+      hora: new Date().toLocaleTimeString('pt-PT'),
+      stake: closed.stake,
+      profit: closed.profit,
+      won: closed.won,
+      timestamp: Date.now(),
+      pending: false,
+      contractType: '',
+      exitDigit: closed.exitDigit,
+    }
+    setManualPendingTrade(null)
+    setManualTrades(prev => [rec, ...prev].slice(0, MAX_MANUAL_TRADES))
+
+    // Reaproveita o strip de trades geral do TradingContext (mesma
+    // tabela/som usados pelos bots) para o utilizador ver tudo junto.
+    const t: Trade = { id: rec.id, hora: rec.hora, tipo: 'Manual', tickFinal: rec.exitDigit ?? 0, preco: `$${rec.stake.toFixed(2)}`, resultado: rec.profit }
+    trading._addTrade(t)
+    if (closed.won) playGainSound()
+  }, [trading])
 
   const handleBotEvent = useCallback((ev: BotEvent) => {
     const { type, botId, payload } = ev
@@ -178,9 +248,6 @@ export function BotsProvider({ children }: { children: ReactNode }) {
         const t: Trade = { id: rec.id, hora: rec.hora, tipo: rec.contractType ?? strategy, tickFinal: rec.exitDigit ?? rec.exitTick ?? 0, preco: `$${rec.stake.toFixed(2)}`, resultado: rec.profit }
         trading._addTrade(t)
 
-        // 🔊 Som de "gain" — só quando o trade fecha com ganho (won).
-        // playGainSound() já verifica internamente se o som está
-        // ativado (preferência em localStorage via lib/sound.ts).
         if (p.won) playGainSound()
 
         trading._setBotStatus({ isRunning: true, currentStep: 'contract_closed' })
@@ -217,6 +284,7 @@ export function BotsProvider({ children }: { children: ReactNode }) {
     onBotStarted: handleBotStarted, onBotEvent: handleBotEvent,
     onBotLogs: handleBotLogs, onError: showError, onAuthFailed: handleAuthFailed,
     onBalance: handleBalance, onTick: handleTick,
+    onManualBuyResult: handleManualBuyResult, onManualTradeClosed: handleManualTradeClosed,
     token, accountId,
   })
 
@@ -236,6 +304,11 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       adminAddCatalogBot: ws.adminAddCatalogBot,
       adminRemoveCatalogBot: ws.adminRemoveCatalogBot,
       adminUpdateCatalogBot: ws.adminUpdateCatalogBot,
+      // ── NOVO ────────────────────────────────────────────────
+      manualBuy: ws.manualBuy,
+      manualPendingTrade,
+      manualTrades,
+      manualBuyError,
     }}>
       {children}
     </Ctx.Provider>
