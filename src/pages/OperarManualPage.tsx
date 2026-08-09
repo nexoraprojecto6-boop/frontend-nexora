@@ -13,8 +13,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useBots } from '../contexto/BotsContext'
-import type { ManualBuyParams } from '../ganchos/useNexoraWs'
+import { useBots } from '../context/BotsContext'
+import type { ManualBuyParams } from '../hooks/useNexoraWs'
 
 const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
 const HISTORY_LOAD = 1000
