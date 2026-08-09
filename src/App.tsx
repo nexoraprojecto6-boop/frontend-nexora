@@ -2,20 +2,27 @@
 // NEXORA FOREX — App Root
 //
 // Providers globais (Auth, Trading, Loader) ficam aqui.
-// BotsProvider NÃO está aqui para as rotas gerais — está apenas
-// dentro do DashboardPage. Isso evita que o WebSocket abra antes
-// do login.
+// BotsProvider NÃO está aqui para as rotas gerais — cada página
+// que precisa dele (Dashboard, OperarManual) monta o seu próprio
+// <BotsProvider/> internamente. Isso evita que o WebSocket abra
+// antes do login, e evita — CORREÇÃO — dois BotsProvider
+// aninhados na mesma árvore, que abriam DUAS ligações WS para a
+// mesma conta e entravam num ciclo de reconexão infinito (cada
+// uma matava a outra via "sessão duplicada", que reconectava e
+// matava a primeira, sem nunca estabilizar — via disso no log:
+// "[WS] Sessão duplicada detectada" a repetir a cada poucos
+// segundos, sem fim).
 //
-// ALTERAÇÃO (Operar Manual): a rota /operar-manual precisa do
-// BotsProvider (para o manualBuy), por isso é envolvida
-// localmente, só nessa rota — sem afetar o comportamento das
-// restantes.
+// CORREÇÃO (Operar Manual): a rota /operar-manual NÃO deve
+// envolver <OperarManualPage/> com <BotsProvider/> aqui — o
+// próprio OperarManualPage.tsx já o faz internamente (mesmo
+// padrão do DashboardPage.tsx). Envolver aqui TAMBÉM criava o
+// duplo provider acima descrito.
 // ============================================================
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { TradingProvider } from './context/TradingContext'
 import { LoaderProvider } from './context/LoaderContext'
-import { BotsProvider } from './context/BotsContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ConnectDerivPage from './pages/ConnectDerivPage'
@@ -41,14 +48,9 @@ export default function App() {
               <Route path="/menu" element={<MenuPage />} />
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/aprender-a-operar" element={<VideoLessonsPage />} />
-              <Route
-                path="/operar-manual"
-                element={
-                  <BotsProvider>
-                    <OperarManualPage />
-                  </BotsProvider>
-                }
-              />
+              {/* OperarManualPage já monta o seu próprio <BotsProvider/>
+                  internamente — NÃO envolver aqui outra vez. */}
+              <Route path="/operar-manual" element={<OperarManualPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </TradingProvider>
