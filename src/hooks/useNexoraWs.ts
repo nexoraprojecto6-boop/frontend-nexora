@@ -1,12 +1,10 @@
 // ============================================================
 // NEXORA FOREX — WebSocket Hook
 //
-// CORRECÇÃO: o backend usa sendToClient(ws, type, payload) que
-// faz JSON.stringify({ type, ...payload }) — ou seja, os campos
-// chegam na RAIZ da mensagem, não aninhados em msg.payload.
-// Exemplo real recebido: { type:'balance', balance:10092.59, currency:'USD' }
-// O hook agora lê da raiz (msg) quando payload está vazio,
-// garantindo que balance e tick são sempre processados.
+// ALTERAÇÃO (Operar Manual): adicionado o envio `manual_buy` e a
+// escuta dos eventos `manual_buy_result` (confirmação de compra)
+// e `manual_trade_closed` (resultado final do contrato manual).
+// Segue exatamente o mesmo padrão dos eventos `bot:*` já existentes.
 // ============================================================
 
 import { useEffect, useRef, useCallback, useState } from 'react'
@@ -15,6 +13,31 @@ import type {
   BotConfig, BotStrategyType, CatalogBot, WsStatus,
 } from '../lib/types'
 import { WS_URL } from '../lib/env'
+
+export interface ManualBuyParams {
+  symbol: string
+  contractType: 'DIGITOVER' | 'DIGITUNDER' | 'DIGITMATCH' | 'DIGITDIFF' | 'CALL' | 'PUT'
+  duration: number
+  durationUnit: 'ticks' | 's' | 'm'
+  stake: number
+  barrier?: number | string
+}
+
+export interface ManualBuyResult {
+  success: boolean
+  contractId?: string
+  payout?: number
+  error?: string
+}
+
+export interface ManualTradeClosed {
+  contractId: string
+  profit: number
+  won: boolean
+  stake: number
+  exitTick?: number
+  exitDigit?: number
+}
 
 interface NexoraWsCallbacks {
   onCatalogLoaded?: (bots: CatalogBot[]) => void
@@ -26,6 +49,8 @@ interface NexoraWsCallbacks {
   onAuthFailed?: () => void
   onBalance?: (balance: number, currency: string) => void
   onTick?: (quote: number) => void
+  onManualBuyResult?: (result: ManualBuyResult) => void
+  onManualTradeClosed?: (trade: ManualTradeClosed) => void
   token?: string | null
   accountId?: string | null
 }
@@ -67,9 +92,6 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     if (!msg?.type) return
 
     const type = msg.type as string
-    // O backend espalha o payload na raiz: { type, ...payload }
-    // por isso lemos tanto de msg.payload (caso exista) como
-    // directamente de msg para compatibilidade total.
     const payload = (msg.payload && typeof msg.payload === 'object'
       ? msg.payload
       : msg) as Record<string, unknown>
@@ -101,10 +123,6 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
           break
         }
 
-        // ── Saldo em tempo real ───────────────────────────────
-        // O backend emite: { type:'balance', balance:10092.59, currency:'USD' }
-        // Os campos estão na raiz (não em payload), por isso lemos
-        // directamente de `msg` além de `payload`.
         case 'balance': {
           const bal = typeof msg.balance === 'number' ? msg.balance
             : typeof payload.balance === 'number' ? payload.balance
@@ -116,13 +134,25 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
           break
         }
 
-        // ── Tick em tempo real ────────────────────────────────
-        // O backend emite: { type:'tick', quote:5123.44, epoch:..., symbol:... }
         case 'tick': {
           const quote = typeof msg.quote === 'number' ? msg.quote
             : typeof payload.quote === 'number' ? payload.quote
             : null
           if (quote != null) cbRef.current.onTick?.(quote)
+          break
+        }
+
+        // ── Compra manual: confirmação imediata ────────────────
+        // Backend deve emitir: { type:'manual_buy_result', success, contractId, payout, error }
+        case 'manual_buy_result': {
+          cbRef.current.onManualBuyResult?.(payload as unknown as ManualBuyResult)
+          break
+        }
+
+        // ── Compra manual: resultado final do contrato ─────────
+        // Backend deve emitir: { type:'manual_trade_closed', contractId, profit, won, stake, exitTick, exitDigit }
+        case 'manual_trade_closed': {
+          cbRef.current.onManualTradeClosed?.(payload as unknown as ManualTradeClosed)
           break
         }
 
@@ -288,6 +318,8 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     resumeBot: useCallback((botId: string) => send('resume_bot', { botId }), [send]),
     deleteBot: useCallback((botId: string) => send('delete_bot', { botId }), [send]),
     getBotLogs: useCallback((botId: string, limit = 100) => send('get_bot_logs', { botId, limit }), [send]),
+    // ── NOVO: compra manual ────────────────────────────────────
+    manualBuy: useCallback((params: ManualBuyParams) => send('manual_buy', params as unknown as Record<string, unknown>), [send]),
     adminAddCatalogBot: useCallback((dto: {
       name: string; description: string; strategy: BotStrategyType
       defaultConfig: BotConfig; tags?: string[]; isActive?: boolean
