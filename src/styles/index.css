@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Poppins:wght@500;600;700;800&display=swap');
 
 /* ============================================================
-   NEXORA FOREX — Design Tokens (paleta Bertoni)
-   Base azul-marinho quase-preto + azul-roxo como cor primária
-   de acção, vermelho reservado para risco/stop/perda, branco
-   para texto e contraste máximo.
+   NEXORA FOREX — Design Tokens v2 (paleta Bertoni "glass")
+   Base quase-preto com fundo em vidro fosco (glassmorphism),
+   azul-roxo como cor primária de acção, ciano como acento vivo
+   de destaque/crescimento, vermelho reservado para risco/stop/perda.
    ============================================================ */
 
 :root {
@@ -16,11 +16,16 @@
   --border:        #1f2226;
   --border-hi:     #2a2e34;
 
-  /* Azul-roxo — acção primária, links, foco (inspirado em --color3/--color4 do Bertoni) */
+  /* Azul-roxo — acção primária, links, foco */
   --blue:          #5862BF;
-  --blue-hi:       #7683FF;
+  --blue-hi:       #7C86FF;
   --blue-dim:      #3a4390;
-  --blue-glow:     rgba(118, 131, 255, 0.35);
+  --blue-glow:     rgba(124, 134, 255, 0.38);
+
+  /* Ciano — acento vivo secundário (destaques, crescimento, métricas em foco) */
+  --cyan:          #22D3EE;
+  --cyan-hi:       #67E8F9;
+  --cyan-glow:     rgba(34, 211, 238, 0.30);
 
   /* Vermelho — risco, perda, parar, sair */
   --red:           #e9203f;
@@ -28,8 +33,12 @@
   --red-dim:       #7a0f20;
   --red-glow:      rgba(233, 32, 63, 0.35);
 
-  /* Verde — usado só para sinalizar lucro/ganho (mínimo, não é cor de marca) */
-  --green:         #18c97a;
+  /* Verde — lucro/ganho */
+  --green:         #1FE08A;
+  --green-glow:    rgba(31, 224, 138, 0.28);
+
+  /* Âmbar — aviso */
+  --amber:         #f5a623;
 
   /* Texto */
   --white:         #ffffff;
@@ -37,15 +46,36 @@
   --text-dim:      #C0C1C6;
   --text-faint:    #7f8aa8;
 
+  /* Vidro — usado em todo o dashboard (cards, sheets, banners) */
+  --glass-bg:       linear-gradient(160deg, rgba(88,98,191,0.14), rgba(6,7,8,0.60));
+  --glass-bg-hi:    linear-gradient(160deg, rgba(88,98,191,0.22), rgba(6,7,8,0.55));
+  --glass-border:   rgba(255,255,255,0.08);
+  --glass-border-hi: rgba(124,134,255,0.45);
+  --glass-blur:     18px;
+  --glass-shadow:   0 8px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.06);
+
   /* Tipografia */
   --font-display:  'Rajdhani', system-ui, sans-serif;
   --font-body:     'Inter', system-ui, sans-serif;
   --font-mono:     'JetBrains Mono', monospace;
   --font-rounded:  'Poppins', system-ui, sans-serif;
 
+  /* Escala de espaçamento — consistente em todo o dashboard */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
+
+  /* Breakpoints de referência (usados nos comentários dos media queries) */
+  --bp-sm: 480px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
 }
 
 * {
@@ -67,8 +97,13 @@ body {
   overflow-x: hidden;
 }
 
-/* Fundo com leve textura radial — dá profundidade sem ruído.
-   Tons de azul-roxo (Bertoni --color3) em vez do azul puro anterior. */
+/* ============================================================
+   FUNDO GLASS DO DASHBOARD
+   Camada de "aurora" com blobs de cor mais vivos (azul-roxo,
+   ciano e um toque de vermelho) + textura de grelha subtil,
+   para dar profundidade sem distrair. Os cards por cima ficam
+   translúcidos com blur, revelando este fundo — efeito de vidro.
+   ============================================================ */
 body::before {
   content: '';
   position: fixed;
@@ -76,8 +111,24 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 15% -10%, rgba(118, 131, 255, 0.08) 0%, transparent 45%),
-    radial-gradient(circle at 100% 10%, rgba(233, 32, 63, 0.04) 0%, transparent 40%);
+    radial-gradient(circle at 12% -8%, rgba(124, 134, 255, 0.20) 0%, transparent 42%),
+    radial-gradient(circle at 88% 6%, rgba(34, 211, 238, 0.14) 0%, transparent 40%),
+    radial-gradient(circle at 50% 105%, rgba(233, 32, 63, 0.08) 0%, transparent 45%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 70%);
 }
 
 #root {
@@ -168,7 +219,22 @@ a {
 }
 .btn-ghost:hover { background: var(--border); border-color: var(--blue-hi); }
 
+/* ── Card padrão do dashboard: agora em vidro (glass) ── */
 .card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card:hover {
+  border-color: var(--glass-border-hi);
+}
+
+/* Variante sólida — para tabelas/listas densas onde o blur atrapalha a leitura */
+.card-solid {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -178,7 +244,7 @@ a {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.18em;
-  background: linear-gradient(120deg, var(--white) 0%, var(--blue-hi) 55%, var(--red-hi) 100%);
+  background: linear-gradient(120deg, var(--white) 0%, var(--blue-hi) 45%, var(--cyan) 80%, var(--red-hi) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -197,23 +263,18 @@ a {
 }
 .dot.live { background: var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
 .dot.off  { background: var(--red); }
-.dot.warn { background: #f5a623; }
+.dot.warn { background: var(--amber); }
 
 /* ============================================================
-   MOBILE RESPONSIVE — ajustes de tamanho/organização
-   (nenhuma lógica de negócio foi alterada, apenas CSS)
+   RESPONSIVIDADE — escala fluída com clamp() em vez de valores
+   fixos por breakpoint sempre que possível; media queries só
+   para mudanças estruturais (grelha, wrap, tamanho do gráfico)
    ============================================================ */
 
 .chart-bars-wrap {
-  --chart-h: 220px;
-  --chart-bar-max: 170px;
+  --chart-h: clamp(118px, 22vw, 220px);
+  --chart-bar-max: clamp(80px, 17vw, 170px);
   height: var(--chart-h);
-}
-@media (max-width: 1023px) {
-  .chart-bars-wrap { --chart-h: 150px; --chart-bar-max: 108px; }
-}
-@media (max-width: 480px) {
-  .chart-bars-wrap { --chart-h: 118px; --chart-bar-max: 80px; }
 }
 
 @media (max-width: 1023px) {
@@ -221,12 +282,14 @@ a {
 }
 
 @media (max-width: 480px) {
-  .controls-grid { gap: 8px; }
-  .stats-strip { gap: 10px; padding: 8px 10px; flex-wrap: wrap; }
+  .controls-grid { gap: var(--space-2); }
+  .stats-strip { gap: 10px; padding: var(--space-2) 10px; flex-wrap: wrap; }
 }
 
 /* ============================================================
    GLASS UI — banner de notificações + sheets de selecção
+   (mesma linguagem visual dos cards, agora unificada por
+   --glass-border / --glass-blur / --glass-shadow)
    ============================================================ */
 
 .glass-banner {
@@ -240,12 +303,12 @@ a {
   align-items: flex-start;
   gap: 12px;
   padding: 16px 18px;
-  border-radius: 0;
-  background: linear-gradient(135deg, rgba(88,98,191,0.45), rgba(6,7,8,0.5));
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.1);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg-hi);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
   animation: glass-drop 0.3s cubic-bezier(.22,1,.36,1);
 }
 @keyframes glass-drop {
@@ -281,11 +344,11 @@ a {
   max-width: 420px;
   max-height: 72vh;
   border-radius: 22px;
-  background: linear-gradient(160deg, rgba(88,98,191,0.4), rgba(4,27,51,0.6));
+  background: var(--glass-bg-hi);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.14);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -318,7 +381,7 @@ a {
   transition: background 0.15s, border-color 0.15s;
 }
 .glass-option:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
-.glass-option.active { background: rgba(118,131,255,0.16); border-color: rgba(118,131,255,0.4); }
+.glass-option.active { background: rgba(124,134,255,0.16); border-color: rgba(124,134,255,0.4); }
 
 .glass-sheet-loader {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
