@@ -38,6 +38,9 @@
 //   - O painel de operar foi tornado mais compacto (duração,
 //     stake e botão comprar numa única linha) para caber junto
 //     ao gráfico sem empurrar o histórico para fora do ecrã.
+//   - Telemóveis muito estreitos (<380px): a linha
+//     duração/stake/comprar passa a empilhar em coluna, para
+//     nenhum dos três campos ficar espremido.
 //   - Nenhuma lógica de dados/estado foi alterada — apenas a
 //     estrutura visual (JSX/CSS) do layout.
 // ============================================================
@@ -565,8 +568,9 @@ function OperarManualInner() {
 
             {displayError && <p style={{ fontSize: 12, color: '#ff5c5c', margin: '8px 0 0' }}>{displayError}</p>}
 
-            {/* Duração + Stake + Comprar numa única linha para minimizar altura */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
+            {/* Duração + Stake + Comprar — em linha (desktop/tablet), empilhado
+                em coluna nos telemóveis muito estreitos via .op-panel-row */}
+            <div className="op-panel-row" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 100px', minWidth: 90 }}>
                 <label style={{ fontSize: 11, color: 'var(--text-dim)' }}>Duração</label>
                 <select
@@ -678,6 +682,17 @@ function OperarManualInner() {
           .op-acc-icon { width: 18px; height: 18px; }
           .op-main { grid-template-rows: minmax(140px, 0.8fr) auto minmax(180px, 1.2fr); }
         }
+
+        /* Telemóveis muito estreitos — duração/stake/comprar empilham
+           em coluna em vez de espremer três campos numa só linha */
+        @media (max-width: 380px) {
+          .op-page { padding: 8px; }
+          .op-panel { padding: 10px 12px; }
+          .op-panel-row { flex-direction: column; align-items: stretch !important; }
+          .op-panel-row > div, .op-panel-row > button { min-width: 0 !important; flex: 1 1 auto !important; }
+          .op-chart-bars { padding: 16px 8px 6px; gap: 4px; }
+        }
+
         .op-left { display: contents; }
 
         .op-chart-card {
@@ -726,6 +741,13 @@ function OperarManualInner() {
           }
           .op-chart-card { flex: 1 1 auto; }
           .op-history { height: 100%; }
+        }
+
+        /* Ecrãs grandes (desktops largos) — o painel de operar ganha
+           um teto de largura para não ficar espremido contra o gráfico
+           num monitor ultra-wide */
+        @media (min-width: 1440px) {
+          .op-panel { max-width: 720px; }
         }
 
         @keyframes resultPop {
