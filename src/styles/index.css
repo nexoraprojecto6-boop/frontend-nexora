@@ -237,10 +237,8 @@ a {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.18em;
-  background: linear-gradient(120deg, var(--white) 0%, var(--blue-hi) 55%, var(--red-hi) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--white);
+  text-shadow: 0 0 18px rgba(118, 131, 255, 0.35), 0 1px 0 rgba(0, 0, 0, 0.25);
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -257,6 +255,33 @@ a {
 .dot.live { background: var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
 .dot.off  { background: var(--red); }
 .dot.warn { background: #f5a623; }
+
+/* ============================================================
+   MARCA — logo 100% em código (SVG + texto), sem ficheiro de
+   imagem. Evita builds partidos por falta de logo.png e escala
+   de forma fluida em qualquer ecrã via clamp().
+   ============================================================ */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  line-height: 1;
+}
+.brand-mark {
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 6px rgba(118, 131, 255, 0.35));
+}
+.brand-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--white);
+  text-shadow: 0 0 18px rgba(118, 131, 255, 0.35), 0 1px 0 rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+/* Três tamanhos prontos — usar conforme o contexto (header vs. ecrã de login) */
+.brand-text--lg { font-size: clamp(20px, 6vw, 30px); letter-spacing: 0.04em; }
+.brand-text--md { font-size: clamp(15px, 4.2vw, 19px); letter-spacing: 0.05em; }
+.brand-text--sm { font-size: clamp(13px, 3.6vw, 16px); letter-spacing: 0.06em; }
 
 /* ============================================================
    MOBILE RESPONSIVE
@@ -281,6 +306,30 @@ a {
 @media (max-width: 480px) {
   .controls-grid { gap: 8px; }
   .stats-strip { gap: 10px; padding: 8px 10px; flex-wrap: wrap; }
+}
+
+/* Telemóveis muito estreitos (ex.: iPhone SE) — aperta ainda mais
+   os espaçamentos genéricos usados um pouco por toda a app */
+@media (max-width: 360px) {
+  .card { border-radius: var(--radius-md); }
+  .btn-primary, .btn-ghost { padding-left: 14px; padding-right: 14px; }
+  .glass-sheet-header { padding: 12px 14px 10px; }
+  .glass-sheet-body { padding: 6px; }
+}
+
+/* Tablets — um pouco mais de respiro que o telemóvel, sem ainda
+   assumir o layout largo de desktop */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .glass-sheet { max-width: 480px; }
+  .glass-banner { width: min(80vw, 440px); }
+}
+
+/* Ecrãs grandes — a app continua com os mesmos max-width por
+   página, mas o vidro ganha um pouco mais de profundidade para
+   não parecer "esticado" em monitores largos */
+@media (min-width: 1440px) {
+  .glass-blur-lg { --glass-blur: 20px; }
+  .card { box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
 }
 
 /* ============================================================
