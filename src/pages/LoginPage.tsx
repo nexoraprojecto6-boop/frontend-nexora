@@ -4,7 +4,6 @@ import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
-import logo from '../logo.png'
 
 // ---------------------------------------------------------------------------
 // Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
@@ -24,22 +23,42 @@ const FLAGS = [
 // O texto da Nexora fica embutido; o da Deriv só é linkado (é a Deriv quem
 // detém e atualiza o próprio documento legal).
 // ---------------------------------------------------------------------------
-const TERMOS_NEXORA = `TERMOS E CONDIÇÕES — NEXORA
+const TERMOS_NEXORA = `TERMOS E CONDIÇÕES — NEXORA FOREX
 
 1. ACEITAÇÃO DOS TERMOS
-Ao utilizar a plataforma Nexora, o utilizador aceita integralmente os presentes termos e condições.
+Ao utilizar a plataforma Nexora Forex, o utilizador aceita integralmente os presentes termos e condições.
 
 2. RISCOS
 O trading envolve riscos elevados de perda de capital. Os resultados passados não garantem resultados futuros. O utilizador é o único responsável pelas suas decisões de investimento.
 
 3. RESPONSABILIDADE
-A Nexora não se responsabiliza por perdas financeiras resultantes do uso da plataforma.
+A Nexora Forex não se responsabiliza por perdas financeiras resultantes do uso da plataforma.
 
 4. CONTACTO
 Para questões, contacte-nos via WhatsApp: +244976289984`
 
 const DERIV_TERMS_URL = 'https://deriv.com/tnc/general-terms.pdf'
 const TERMS_ACCEPTED_KEY = 'nexora_terms_accepted_v1'
+
+// ---------------------------------------------------------------------------
+// Marca — logótipo 100% em SVG/código, sem ficheiro de imagem (evita
+// builds partidos por falta de logo.png e escala em qualquer ecrã).
+// ---------------------------------------------------------------------------
+function BrandMark({ size = 40 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" className="brand-mark">
+      <path d="M14 1L27 14L14 27L1 14L14 1Z" stroke="url(#nxGradLogin)" strokeWidth="1.6" />
+      <path d="M8 16.5L11.5 12L15 15.5L20 9" stroke="url(#nxGradLogin)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <defs>
+        <linearGradient id="nxGradLogin" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffffff" />
+          <stop offset="0.55" stopColor="var(--blue-hi)" />
+          <stop offset="1" stopColor="var(--red-hi)" />
+        </linearGradient>
+      </defs>
+    </svg>
+  )
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -172,14 +191,10 @@ export default function LoginPage() {
       {/* Cartão de login — liso, sem moldura */}
       <div className="card fade-in" style={cardStyle}>
         <div style={{ textAlign: 'center' }}>
-          {/* Espaço reservado para o logo em PNG (sem fundo) — troca o src abaixo
-              pelo ficheiro do teu logo. O tamanho acompanha o texto "NEXORA". */}
-          <img
-            src={logo}
-            alt="Nexora"
-            style={{ height: 56, width: 'auto', marginBottom: 10, objectFit: 'contain' }}
-          />
-          <h1 className="logo-text" style={{ fontSize: 30, marginBottom: 4, fontWeight: 700, letterSpacing: 0.5 }}>NEXORA</h1>
+          <div className="brand" style={{ justifyContent: 'center', marginBottom: 10 }}>
+            <BrandMark size={40} />
+          </div>
+          <h1 className="brand-text brand-text--lg">NEXORA FOREX</h1>
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginTop: 26 }}>
@@ -227,7 +242,7 @@ export default function LoginPage() {
         </div>
 
         <div style={{ marginTop: 30, textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora</p>
+          <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
         </div>
       </div>
 
@@ -261,7 +276,7 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
               borderBottom: tab === 'nexora' ? '2px solid var(--blue-hi)' : '2px solid transparent',
             }}
           >
-            NEXORA
+            NEXORA FOREX
           </button>
           <button
             onClick={() => setTab('deriv')}
@@ -283,10 +298,11 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
           ) : (
             <div>
               <p style={{ color: 'var(--text-dim)', fontSize: 12.5, lineHeight: 1.7, marginBottom: 14 }}>
-                Ao ligar a tua conta Deriv através da Nexora, estás também sujeito
-                aos termos e condições gerais da Deriv, que regulam a abertura de
-                conta, depósitos, levantamentos e a negociação de contratos na
-                própria Deriv. A Nexora não altera nem substitui esses termos.
+                Ao ligar a tua conta Deriv através da Nexora Forex, estás também
+                sujeito aos termos e condições gerais da Deriv, que regulam a
+                abertura de conta, depósitos, levantamentos e a negociação de
+                contratos na própria Deriv. A Nexora Forex não altera nem
+                substitui esses termos.
               </p>
               <a
                 href={DERIV_TERMS_URL}
@@ -418,7 +434,7 @@ const flagBtnStyle = (active: boolean): React.CSSProperties => ({
 const cardStyle: React.CSSProperties = {
   position: 'relative', zIndex: 10,
   width: '100%', maxWidth: 400,
-  padding: '48px 36px 36px',
+  padding: 'clamp(28px, 6vw, 48px) clamp(20px, 5vw, 36px) clamp(24px, 5vw, 36px)',
   borderRadius: 28,
   border: 'none',
   boxShadow: 'none',
