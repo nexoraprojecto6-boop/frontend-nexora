@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
+import logo from '../logo.png'
 
 // ---------------------------------------------------------------------------
 // Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
@@ -18,19 +19,49 @@ const FLAGS = [
   { code: 'es', emoji: '🇪🇸', label: 'Español' },
 ]
 
+// ---------------------------------------------------------------------------
+// Termos e Condições — mostrados no modal flutuante depois do login.
+// O texto da Nexora fica embutido; o da Deriv só é linkado (é a Deriv quem
+// detém e atualiza o próprio documento legal).
+// ---------------------------------------------------------------------------
+const TERMOS_NEXORA = `TERMOS E CONDIÇÕES — NEXORA
+
+1. ACEITAÇÃO DOS TERMOS
+Ao utilizar a plataforma Nexora, o utilizador aceita integralmente os presentes termos e condições.
+
+2. RISCOS
+O trading envolve riscos elevados de perda de capital. Os resultados passados não garantem resultados futuros. O utilizador é o único responsável pelas suas decisões de investimento.
+
+3. RESPONSABILIDADE
+A Nexora não se responsabiliza por perdas financeiras resultantes do uso da plataforma.
+
+4. CONTACTO
+Para questões, contacte-nos via WhatsApp: +244976289984`
+
+const DERIV_TERMS_URL = 'https://deriv.com/tnc/general-terms.pdf'
+const TERMS_ACCEPTED_KEY = 'nexora_terms_accepted_v1'
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const { show, hide } = useLoader() as any // hide pode não existir consoante a versão do contexto
-  const { isLocalAuthenticated, isLocalLoading, loginLocal } = useAuth()
+  const { isLocalAuthenticated, isLocalLoading, loginLocal, logout } = useAuth() as any
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [activeLang, setActiveLang] = useState('ao')
+  const [showTerms, setShowTerms] = useState(false)
+
+  // Distingue "já estava autenticado ao abrir a página" (ex: refresh)
+  // de "acabou de fazer login agora mesmo, aqui, neste formulário".
+  // Sem isto, o useEffect abaixo navega sozinho para /connect-deriv
+  // assim que loginLocal() atualiza o contexto — antes do modal de
+  // termos ter hipótese de aparecer.
+  const justLoggedInRef = useRef(false)
 
   useEffect(() => {
-    if (!isLocalLoading && isLocalAuthenticated) {
+    if (!isLocalLoading && isLocalAuthenticated && !justLoggedInRef.current) {
       navigate('/connect-deriv')
     }
   }, [isLocalLoading, isLocalAuthenticated])
@@ -48,8 +79,26 @@ export default function LoginPage() {
     show('A entrar...')
     try {
       const res = await api.loginLocal(email.trim(), password)
+
+      // Marca ANTES de atualizar o contexto de auth, para o useEffect
+      // não disparar a navegação automática enquanto decidimos aqui
+      // se é preciso mostrar o modal de termos primeiro.
+      justLoggedInRef.current = true
       loginLocal(res.token, res.user)
-      navigate('/connect-deriv')
+
+      // Depois de autenticar, mostra o modal de Termos e Condições no
+      // centro do ecrã antes de avançar — só passa para a próxima página
+      // quando o utilizador confirmar que leu e aceita.
+      let alreadyAccepted = false
+      try { alreadyAccepted = localStorage.getItem(TERMS_ACCEPTED_KEY) === '1' } catch { /* ignora */ }
+
+      try { hide?.() } catch { /* opcional */ }
+
+      if (alreadyAccepted) {
+        navigate('/connect-deriv')
+      } else {
+        setShowTerms(true)
+      }
     } catch (err: any) {
       // Credenciais erradas → 401 do backend. Mostramos a mensagem certa
       // em vez de deixar o loader a girar para sempre.
@@ -59,14 +108,36 @@ export default function LoginPage() {
       } else {
         setError(msg)
       }
+      justLoggedInRef.current = false
+      try { hide?.() } catch { /* opcional, LoaderContext pode não ter hide() */ }
     } finally {
       setIsSubmitting(false)
-      try { hide?.() } catch { /* opcional, LoaderContext pode não ter hide() */ }
     }
   }
 
   const handleForgotPassword = () => {
     alert('Recuperação de senha em breve. Por agora, contacta o suporte via WhatsApp para reativar o acesso.')
+  }
+
+  const handleAcceptTerms = () => {
+    try { localStorage.setItem(TERMS_ACCEPTED_KEY, '1') } catch { /* ignora */ }
+    setShowTerms(false)
+    navigate('/connect-deriv')
+  }
+
+  const handleDeclineTerms = () => {
+    // Sem aceitar os termos não há acesso — termina a sessão local e
+    // volta ao ecrã de login.
+    setShowTerms(false)
+    justLoggedInRef.current = false
+    try {
+      if (typeof logout === 'function') {
+        logout()
+      } else {
+        localStorage.removeItem('token')
+      }
+    } catch { /* ignora */ }
+    navigate('/login', { replace: true })
   }
 
   if (isLocalLoading) {
@@ -101,7 +172,14 @@ export default function LoginPage() {
       {/* Cartão de login — liso, sem moldura */}
       <div className="card fade-in" style={cardStyle}>
         <div style={{ textAlign: 'center' }}>
-          <h1 className="logo-text" style={{ fontSize: 30, marginBottom: 4, fontWeight: 700, letterSpacing: 0.5 }}>NEXORA FOREX</h1>
+          {/* Espaço reservado para o logo em PNG (sem fundo) — troca o src abaixo
+              pelo ficheiro do teu logo. O tamanho acompanha o texto "NEXORA". */}
+          <img
+            src={logo}
+            alt="Nexora"
+            style={{ height: 56, width: 'auto', marginBottom: 10, objectFit: 'contain' }}
+          />
+          <h1 className="logo-text" style={{ fontSize: 30, marginBottom: 4, fontWeight: 700, letterSpacing: 0.5 }}>NEXORA</h1>
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginTop: 26 }}>
@@ -149,7 +227,93 @@ export default function LoginPage() {
         </div>
 
         <div style={{ marginTop: 30, textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
+          <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora</p>
+        </div>
+      </div>
+
+      {/* Modal flutuante, centrado — Termos e Condições da Nexora e da Deriv,
+          exigido logo após o login antes de continuar */}
+      {showTerms && <TermsModal onAccept={handleAcceptTerms} onDecline={handleDeclineTerms} />}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Modal de Termos e Condições — flutua no centro da página
+// ---------------------------------------------------------------------------
+function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void }) {
+  const [tab, setTab] = useState<'nexora' | 'deriv'>('nexora')
+
+  return (
+    <div className="glass-overlay" style={{ zIndex: 900 }}>
+      <div className="glass-sheet" style={{ maxWidth: 460 }}>
+        <div className="glass-sheet-header">
+          <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 16 }}>Termos e Condições</p>
+        </div>
+
+        {/* Tabs — Nexora / Deriv */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <button
+            onClick={() => setTab('nexora')}
+            style={{
+              flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+              color: tab === 'nexora' ? 'var(--white)' : 'var(--text-faint)',
+              borderBottom: tab === 'nexora' ? '2px solid var(--blue-hi)' : '2px solid transparent',
+            }}
+          >
+            NEXORA
+          </button>
+          <button
+            onClick={() => setTab('deriv')}
+            style={{
+              flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+              color: tab === 'deriv' ? 'var(--white)' : 'var(--text-faint)',
+              borderBottom: tab === 'deriv' ? '2px solid var(--blue-hi)' : '2px solid transparent',
+            }}
+          >
+            DERIV
+          </button>
+        </div>
+
+        <div className="glass-sheet-body" style={{ maxHeight: 320, padding: 18 }}>
+          {tab === 'nexora' ? (
+            <pre style={{ color: 'var(--text-dim)', fontSize: 11.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-body)' }}>
+              {TERMOS_NEXORA}
+            </pre>
+          ) : (
+            <div>
+              <p style={{ color: 'var(--text-dim)', fontSize: 12.5, lineHeight: 1.7, marginBottom: 14 }}>
+                Ao ligar a tua conta Deriv através da Nexora, estás também sujeito
+                aos termos e condições gerais da Deriv, que regulam a abertura de
+                conta, depósitos, levantamentos e a negociação de contratos na
+                própria Deriv. A Nexora não altera nem substitui esses termos.
+              </p>
+              <a
+                href={DERIV_TERMS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  color: 'var(--blue-hi)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                Ver termos completos da Deriv
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, padding: 16, borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+          <button onClick={onDecline} className="btn-ghost" style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600 }}>
+            Não aceito
+          </button>
+          <button onClick={onAccept} className="btn-primary" style={{ flex: 1 }}>
+            Li e aceito os termos
+          </button>
         </div>
       </div>
     </div>
