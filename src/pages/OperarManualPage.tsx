@@ -100,6 +100,7 @@ function calcAll(hist: number[], win: number) {
 const fieldStyle: React.CSSProperties = {
   background: 'var(--bg-card-hi)', color: 'var(--text)', border: '1px solid var(--border)',
   borderRadius: 10, padding: '8px 10px', fontSize: 14, width: '100%', minHeight: 40,
+  fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums',
 }
 
 function OperarManualInner() {
@@ -410,7 +411,7 @@ function OperarManualInner() {
               </span>
 
               <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
-                {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
+                {phase === 'loading' ? '...' : <><span className="tabular">{Math.min(info.total, win)}</span> ticks</>}
               </span>
 
               <div style={{ position: 'relative' }}>
@@ -461,14 +462,14 @@ function OperarManualInner() {
                         {lastResult.won ? 'WIN' : 'LOSS'}
                       </span>
                     )}
-                    <span style={{ fontSize: 11.5, color: 'var(--text)', lineHeight: 1 }}>{pct.toFixed(1)}%</span>
+                    <span className="tabular" style={{ fontSize: 11, color: 'var(--text)', lineHeight: 1 }}>{pct.toFixed(1)}%</span>
                     <div style={{
                       width: '100%', height: `${Math.min(94, Math.max(4, ratio * 100))}%`, background: color,
                       borderRadius: 3,
                       outline: showResult ? `2px solid ${lastResult?.won ? '#3ddc84' : '#ff5c5c'}` : 'none',
                       outlineOffset: 1,
                     }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: showResult ? (lastResult?.won ? '#3ddc84' : '#ff5c5c') : 'var(--white)', lineHeight: 1 }}>{digit}</span>
+                    <span className="tabular" style={{ fontSize: 13, fontWeight: 700, color: showResult ? (lastResult?.won ? '#3ddc84' : '#ff5c5c') : 'var(--white)', lineHeight: 1 }}>{digit}</span>
                   </div>
                 )
               })}
@@ -519,8 +520,8 @@ function OperarManualInner() {
                       cursor: valid ? 'pointer' : 'not-allowed', opacity: valid ? 1 : 0.35,
                     }}
                   >
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--white)' }}>{digit}</span>
-                    <span style={{ fontSize: 10.5, marginTop: 1, color: isHigh ? '#3ddc84' : isLow ? '#ff5c5c' : 'var(--text-dim)' }}>
+                    <span className="tabular" style={{ fontSize: 15, fontWeight: 700, color: 'var(--white)' }}>{digit}</span>
+                    <span className="tabular" style={{ fontSize: 10, marginTop: 1, color: isHigh ? '#3ddc84' : isLow ? '#ff5c5c' : 'var(--text-dim)' }}>
                       {pct.toFixed(1)}%
                     </span>
                   </button>
@@ -606,7 +607,7 @@ function OperarManualInner() {
         .op-balance-card::-webkit-scrollbar { display: none; }
         .op-stat { flex: 0 0 auto; white-space: nowrap; }
         .op-stat-label { font-size: 10.5px; color: var(--text-dim); margin: 0; line-height: 1.2; }
-        .op-stat-value { font-size: 16px; font-weight: 800; margin: 0; line-height: 1.25; }
+        .op-stat-value { font-size: 16px; font-weight: 700; margin: 0; line-height: 1.25; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
         .op-stat-unit { font-size: 11px; color: var(--text-dim); }
         .op-acc-btn {
           margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
