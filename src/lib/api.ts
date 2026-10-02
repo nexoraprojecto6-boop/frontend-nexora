@@ -99,11 +99,29 @@ export class DerivTokenExpiredError extends Error {
   }
 }
 
+// Erro HTTP com o código de estado — permite distinguir 401
+// (sessão inválida) de falhas de rede/servidor.
+export class HttpError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'HttpError'
+    this.status = status
+  }
+}
+
 export interface RegisterPayload {
   fullName: string
   whatsapp: string
   email: string
   password: string
+}
+
+export interface LocalSessionResponse {
+  success: boolean
+  created?: boolean   // true quando a conta foi criada neste login
+  token: string
+  user: LocalUser
 }
 
 // Re-exportado para quem importa o tipo a partir de '../lib/api'
@@ -121,6 +139,17 @@ function getToken(): string | null {
 
 function getLocalToken(): string | null {
   return localStorage.getItem('localToken')
+}
+
+// Extrai a mensagem de erro, qualquer que seja o formato do backend:
+// { error: { message } } | { message } | { error: "texto" }
+function extractErrorMessage(body: any, status: number): string {
+  return (
+    body?.error?.message ||
+    body?.message ||
+    (typeof body?.error === 'string' ? body.error : '') ||
+    `HTTP ${status}`
+  )
 }
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
@@ -149,12 +178,12 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
 // Chamada autenticada com o token de LOGIN LOCAL (não confundir com o
 // token de sessão Deriv usado em fetchWithAuth).
 //
-// CORREÇÃO: o backend (requireLocalAuth) lê o header
-// "x-local-authorization", não "Authorization" — este último já é
-// usado pelo token de sessão Deriv nas rotas de trading, por isso o
-// backend usa um header próprio para não colidirem. Antes desta
-// correção, todas as chamadas aqui (getLocalMe, rotas de admin)
-// falhavam silenciosamente a autenticação.
+// O backend (requireLocalAuth) lê o header "x-local-authorization",
+// não "Authorization" — este último já é usado pelo token de sessão
+// Deriv nas rotas de trading.
+//
+// Lança HttpError (com .status) para o AuthContext conseguir
+// distinguir 401 de uma falha de rede.
 async function fetchWithLocalAuth(endpoint: string, options: RequestInit = {}) {
   const token = getLocalToken()
   const headers: Record<string, string> = {
@@ -166,7 +195,7 @@ async function fetchWithLocalAuth(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers })
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
-    throw new Error(err.message || err.error || `HTTP ${response.status}`)
+    throw new HttpError(extractErrorMessage(err, response.status), response.status)
   }
   return response.json()
 }
@@ -207,7 +236,7 @@ export const api = {
     }
   },
 
-  // ── Registo / Login local ─────────────────────────────────
+  // ── Login local (entra ou cria a conta automaticamente) ───
   async register(payload: RegisterPayload): Promise<{ success: boolean; message: string; user: LocalUser }> {
     const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
       method: 'POST',
@@ -216,12 +245,12 @@ export const api = {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
+      throw new Error(extractErrorMessage(data, res.status))
     }
     return data
   },
 
-  async loginLocal(email: string, password: string): Promise<{ success: boolean; token: string; user: LocalUser }> {
+  async loginLocal(email: string, password: string): Promise<LocalSessionResponse> {
     const res = await fetch(`${API_BASE_URL}/api/auth/login-local`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -229,7 +258,7 @@ export const api = {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`)
+      throw new Error(extractErrorMessage(data, res.status))
     }
     return data
   },
