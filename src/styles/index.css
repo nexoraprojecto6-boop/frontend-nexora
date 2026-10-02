@@ -1,16 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
-
 /* ============================================================
-   NEXORA — Design Tokens (Deep Graphite · Estrutura Quadrada)
-   Fundo sólido/gradiente escuro, sem planeta nem ruído — só um
-   grid técnico muito subtil, tipo terminal de trading. Cards com
-   cantos quase retos (mínimo de raio, só para não cortar).
-   Tipografia: Rajdhani (display) + Inter (corpo) + JetBrains Mono
-   (números), todas importadas de facto — sem fallback fantasma.
+   NEXORA — Design Tokens (estilo app nativa)
+   Fonte do sistema (como React Native), superfícies sólidas,
+   cantos 12–16px, alvos de toque ≥ 40px, safe-area em tudo.
    ============================================================ */
 
 :root {
-  /* Base — grafite escuro, neutro, sem tons "espaço" */
+  /* Base */
   --bg:            #0b0d12;
   --bg-elevated:   #10131a;
   --bg-card:       #14171f;
@@ -18,19 +13,19 @@
   --border:        #232733;
   --border-hi:     #323848;
 
-  /* Azul-roxo — acção primária, links, foco */
+  /* Azul — acção primária */
   --blue:          #5862BF;
   --blue-hi:       #7683FF;
   --blue-dim:      #3a4390;
   --blue-glow:     rgba(118, 131, 255, 0.3);
 
-  /* Vermelho — risco, perda, parar, sair */
+  /* Vermelho — risco, perda, sair */
   --red:           #e9203f;
   --red-hi:        #ff3a57;
   --red-dim:       #7a0f20;
   --red-glow:      rgba(233, 32, 63, 0.3);
 
-  /* Verde — só para lucro/ganho */
+  /* Verde — lucro/ganho */
   --green:         #18c97a;
 
   /* Texto */
@@ -39,23 +34,27 @@
   --text-dim:      #C0C1C6;
   --text-faint:    #7f8aa8;
 
-  /* Glass — vidro escuro usado em cards, headers e sheets */
-  --glass-bg:        rgba(16, 19, 26, 0.72);
-  --glass-bg-hi:      rgba(22, 26, 35, 0.8);
+  /* Superfícies translúcidas (usadas em botões ghost e fundos) */
+  --glass-bg:        rgba(20, 23, 31, 0.9);
+  --glass-bg-hi:     rgba(26, 30, 40, 0.95);
   --glass-border:    rgba(255, 255, 255, 0.06);
   --glass-border-hi: rgba(118, 131, 255, 0.28);
   --glass-blur:      14px;
-  --glass-shadow:    0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --glass-shadow:    0 1px 2px rgba(0, 0, 0, 0.35);
 
-  /* Tipografia — importadas acima, sem gambiarra */
-  --font-display:  'Rajdhani', system-ui, sans-serif;
-  --font-body:     'Inter', system-ui, sans-serif;
-  --font-mono:     'JetBrains Mono', monospace;
+  /* Tipografia — fonte do sistema */
+  --font-display:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-body:     var(--font-display);
+  --font-mono:     ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Raios — quase quadrado em toda a app */
-  --radius-sm: 3px;
-  --radius-md: 5px;
-  --radius-lg: 6px;
+  /* Raios */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Safe-area (notch / barra de gestos) */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * {
@@ -64,11 +63,17 @@
   padding: 0;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html, body, #root {
   height: 100%;
 }
 
 body {
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
@@ -78,19 +83,8 @@ body {
 }
 
 /* ============================================================
-   FUNDO — camada base fixa, atrás de #root (z-index 3):
-   1) .space-base  → gradiente grafite liso, sem planeta
-   2) .space-stars → grid técnico muito subtil (linhas finas)
-   3) .space-glitch → deixado vazio (sem candles fantasma)
-   Mantém-se a mesma marcação HTML de antes, só o conteúdo visual
-   muda — não é preciso tocar no componente que a insere:
-     <div class="space-bg">
-       <div class="space-base"></div>
-       <div class="space-stars"></div>
-       <div class="space-glitch"></div>
-     </div>
+   FUNDO — camada fixa atrás de #root
    ============================================================ */
-
 .space-bg {
   position: fixed;
   inset: 0;
@@ -107,7 +101,6 @@ body {
     linear-gradient(180deg, #0d0f16 0%, #0b0d12 55%, #08090d 100%);
 }
 
-/* grid técnico subtil, tipo terminal — substitui a poeira estelar */
 .space-stars {
   position: absolute;
   inset: 0;
@@ -120,27 +113,19 @@ body {
   -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 0%, transparent 75%);
 }
 
-.space-glitch {
-  display: none;
-}
-
-.space-bg::after {
-  content: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .space-stars, .space-glitch, .space-bg::after { animation: none; }
-}
+.space-glitch { display: none; }
+.space-bg::after { content: none; }
 
 #root {
   position: relative;
   z-index: 3;
+  min-height: 100dvh;
 }
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 button {
@@ -151,11 +136,9 @@ button {
   color: inherit;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: manipulation;
 }
-
-button:disabled {
-  cursor: not-allowed;
-}
+button:disabled { cursor: not-allowed; }
 
 input, select {
   font-family: inherit;
@@ -163,10 +146,12 @@ input, select {
   color: inherit;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* iOS dá zoom automático em campos <16px e desalinha a página */
+@media (max-width: 1023px) {
+  input, select { font-size: 16px !important; }
 }
+
+a { color: inherit; text-decoration: none; }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -183,62 +168,70 @@ a {
   font-family: var(--font-mono);
 }
 
-/* ── Botão primário reutilizável ── */
+/* ── Botões ── */
 .btn-primary {
-  background: linear-gradient(135deg, var(--blue), var(--blue-hi));
+  background: var(--blue-hi);
   color: var(--white);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 14px 20px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0;
+  min-height: 48px;
+  padding: 12px 20px;
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px var(--blue-glow);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: filter 0.15s ease, opacity 0.15s ease;
 }
-.btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px var(--blue-glow); }
-.btn-primary:active:not(:disabled) { transform: translateY(0); }
-.btn-primary:disabled { opacity: 0.5; box-shadow: none; }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-primary:active:not(:disabled) { filter: brightness(0.92); }
+.btn-primary:disabled { opacity: 0.5; }
 
 .btn-danger {
-  background: linear-gradient(135deg, var(--red), var(--red-hi));
+  background: var(--red-hi);
   color: var(--white);
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
+  min-height: 44px;
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px var(--red-glow);
 }
 
 .btn-ghost {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  border: 1px solid var(--glass-border);
+  background: var(--bg-card-hi);
+  border: 1px solid var(--border);
   color: var(--text);
   border-radius: var(--radius-md);
+  min-height: 40px;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .btn-ghost:hover { background: var(--glass-bg-hi); border-color: var(--glass-border-hi); }
 
-/* ── Card padrão — vidro escuro, cantos quase retos ── */
+/* Botões pequenos do header — alvo de toque correcto */
+.hdr-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ── Card ── */
 .card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  border: 1px solid var(--glass-border);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--glass-shadow);
+  max-width: 100%;
 }
 
 .logo-text {
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   color: var(--white);
-  text-shadow: 0 0 18px rgba(118, 131, 255, 0.35), 0 1px 0 rgba(0, 0, 0, 0.25);
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -246,47 +239,36 @@ a {
 @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: fade-in 0.3s ease forwards; }
 
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot.live { background: var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
 .dot.off  { background: var(--red); }
 .dot.warn { background: #f5a623; }
 
-/* ============================================================
-   MARCA — logo 100% em código (SVG + texto), sem ficheiro de
-   imagem. Evita builds partidos por falta de logo.png e escala
-   de forma fluida em qualquer ecrã via clamp().
-   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* ── Marca ── */
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 0.55em;
   line-height: 1;
 }
-.brand-mark {
-  flex-shrink: 0;
-  filter: drop-shadow(0 0 6px rgba(118, 131, 255, 0.35));
-}
+.brand-mark { flex-shrink: 0; }
 .brand-text {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 800;
   color: var(--white);
-  text-shadow: 0 0 18px rgba(118, 131, 255, 0.35), 0 1px 0 rgba(0, 0, 0, 0.25);
   white-space: nowrap;
 }
-/* Três tamanhos prontos — usar conforme o contexto (header vs. ecrã de login) */
-.brand-text--lg { font-size: clamp(20px, 6vw, 30px); letter-spacing: 0.04em; }
-.brand-text--md { font-size: clamp(15px, 4.2vw, 19px); letter-spacing: 0.05em; }
-.brand-text--sm { font-size: clamp(13px, 3.6vw, 16px); letter-spacing: 0.06em; }
+.brand-text--lg { font-size: clamp(22px, 6vw, 30px); letter-spacing: 0.08em; }
+.brand-text--md { font-size: clamp(16px, 4.2vw, 19px); letter-spacing: 0.08em; }
+.brand-text--sm { font-size: clamp(14px, 3.6vw, 16px); letter-spacing: 0.08em; }
 
 /* ============================================================
-   MOBILE RESPONSIVE
+   GRÁFICO DE DÍGITOS (ChartSection)
    ============================================================ */
-
 .chart-bars-wrap {
   --chart-h: 220px;
   --chart-bar-max: 170px;
@@ -298,45 +280,32 @@ a {
 @media (max-width: 480px) {
   .chart-bars-wrap { --chart-h: 118px; --chart-bar-max: 80px; }
 }
-
-@media (max-width: 1023px) {
-  .card { max-width: 100%; }
-}
-
 @media (max-width: 480px) {
   .controls-grid { gap: 8px; }
   .stats-strip { gap: 10px; padding: 8px 10px; flex-wrap: wrap; }
 }
 
-/* Telemóveis muito estreitos (ex.: iPhone SE) — aperta ainda mais
-   os espaçamentos genéricos usados um pouco por toda a app */
-@media (max-width: 360px) {
-  .card { border-radius: var(--radius-md); }
-  .btn-primary, .btn-ghost { padding-left: 14px; padding-right: 14px; }
-  .glass-sheet-header { padding: 12px 14px 10px; }
-  .glass-sheet-body { padding: 6px; }
+/* ============================================================
+   DASHBOARD — o scroll mobile tem de vencer o overflow:hidden
+   inline do <main>, senão o conteúdo é cortado
+   ============================================================ */
+@media (max-width: 1023px) {
+  .dash-main {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(var(--safe-bottom) + 8px) !important;
+  }
+  .dash-trades { min-height: 300px !important; }
 }
-
-/* Tablets — um pouco mais de respiro que o telemóvel, sem ainda
-   assumir o layout largo de desktop */
-@media (min-width: 640px) and (max-width: 1023px) {
-  .glass-sheet { max-width: 480px; }
-  .glass-banner { width: min(80vw, 440px); }
-}
-
-/* Ecrãs grandes — a app continua com os mesmos max-width por
-   página, mas o vidro ganha um pouco mais de profundidade para
-   não parecer "esticado" em monitores largos */
-@media (min-width: 1440px) {
-  .glass-blur-lg { --glass-blur: 20px; }
-  .card { box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
+@media (max-width: 480px) {
+  .dash-trades { min-height: 260px !important; }
 }
 
 /* ============================================================
-   GLASS UI — banner de notificações + sheets de selecção
-   (também com cantos mais quadrados)
+   MODAIS / SHEETS — nunca maiores que o ecrã;
+   no telemóvel viram bottom-sheet
    ============================================================ */
-
 .glass-banner {
   position: fixed;
   top: 50%;
@@ -344,16 +313,16 @@ a {
   transform: translate(-50%, -50%);
   z-index: 500;
   width: min(92vw, 420px);
+  max-height: 80dvh;
+  overflow-y: auto;
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 16px 18px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(88,98,191,0.4), rgba(11,13,18,0.7));
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  border: 1px solid rgba(255,255,255,0.07);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hi);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
   animation: glass-drop 0.3s cubic-bezier(.22,1,.36,1);
 }
 @keyframes glass-drop {
@@ -362,10 +331,12 @@ a {
 }
 .glass-banner-close {
   color: var(--text-faint);
-  font-size: 13px;
-  padding: 4px 6px;
+  padding: 6px;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .glass-banner-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 
@@ -373,13 +344,11 @@ a {
   position: fixed;
   inset: 0;
   z-index: 600;
-  background: rgba(8,9,13,0.65);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  background: rgba(8,9,13,0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px);
   animation: glass-fade 0.25s ease;
 }
 @keyframes glass-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -387,48 +356,70 @@ a {
 .glass-sheet {
   width: 100%;
   max-width: 420px;
-  max-height: 72vh;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(160deg, rgba(88,98,191,0.32), rgba(11,13,18,0.85));
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.1);
+  max-height: calc(100dvh - 32px - var(--safe-top) - var(--safe-bottom));
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hi);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: glass-sheet-pop 0.25s cubic-bezier(.22,1,.36,1);
 }
 @keyframes glass-sheet-pop {
-  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  from { transform: scale(0.96) translateY(8px); opacity: 0; }
   to   { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .glass-sheet-header {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
   flex-shrink: 0;
 }
 
 .glass-sheet-body {
   padding: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .glass-option {
   width: 100%;
   text-align: left;
-  padding: 14px 14px;
+  padding: 14px;
+  min-height: 52px;
   border-radius: var(--radius-md);
   background: transparent;
   border: 1px solid transparent;
   transition: background 0.15s, border-color 0.15s;
 }
-.glass-option:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.07); }
+.glass-option:hover { background: rgba(255,255,255,0.05); border-color: var(--border); }
 .glass-option.active { background: rgba(118,131,255,0.14); border-color: rgba(118,131,255,0.38); }
 
 .glass-sheet-loader {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 12px; padding: 40px 20px;
+}
+
+@media (max-width: 640px) {
+  .glass-overlay { align-items: flex-end; padding: 0; }
+  .glass-sheet {
+    max-width: 100%;
+    max-height: 88dvh;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: var(--safe-bottom);
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .glass-banner { width: min(80vw, 440px); }
+}
+
+@media (max-width: 360px) {
+  .btn-primary, .btn-ghost { padding-left: 14px; padding-right: 14px; }
+  .glass-sheet-header { padding: 12px 14px 10px; }
+  .glass-sheet-body { padding: 6px; }
 }
