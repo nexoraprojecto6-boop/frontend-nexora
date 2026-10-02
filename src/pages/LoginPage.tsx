@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { IoOpenOutline, IoMailOutline, IoLockClosedOutline } from 'react-icons/io5'
+import { AO, BR, PT, US, ES } from 'country-flag-icons/react/3x2'
 import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
@@ -11,17 +13,16 @@ import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
 // usar o `activeLang` abaixo).
 // ---------------------------------------------------------------------------
 const FLAGS = [
-  { code: 'ao', emoji: '🇦🇴', label: 'Angola' },
-  { code: 'br', emoji: '🇧🇷', label: 'Brasil' },
-  { code: 'pt', emoji: '🇵🇹', label: 'Portugal' },
-  { code: 'us', emoji: '🇺🇸', label: 'English' },
-  { code: 'es', emoji: '🇪🇸', label: 'Español' },
+  { code: 'ao', Flag: AO, label: 'Angola' },
+  { code: 'br', Flag: BR, label: 'Brasil' },
+  { code: 'pt', Flag: PT, label: 'Portugal' },
+  { code: 'us', Flag: US, label: 'English' },
+  { code: 'es', Flag: ES, label: 'Español' },
 ]
 
 // ---------------------------------------------------------------------------
-// Termos e Condições — mostrados no modal flutuante depois do login.
-// O texto da Nexora fica embutido; o da Deriv só é linkado (é a Deriv quem
-// detém e atualiza o próprio documento legal).
+// Termos e Condições — mostrados no modal depois do login.
+// O texto da Nexora fica embutido; o da Deriv só é linkado.
 // ---------------------------------------------------------------------------
 const TERMOS_NEXORA = `TERMOS E CONDIÇÕES — NEXORA FOREX
 
@@ -45,8 +46,7 @@ function termsAlreadyAccepted(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Marca — logótipo 100% em SVG/código, sem ficheiro de imagem (evita
-// builds partidos por falta de logo.png e escala em qualquer ecrã).
+// Marca — logótipo 100% em SVG/código, sem ficheiro de imagem
 // ---------------------------------------------------------------------------
 function BrandMark({ size = 40 }: { size?: number }) {
   return (
@@ -78,8 +78,7 @@ export default function LoginPage() {
 
   // Fonte única de verdade para "o que acontece quando há sessão local":
   //   - termos já aceites  -> segue para /connect-deriv
-  //   - termos por aceitar -> mostra o modal (também após um refresh,
-  //                           para não dar para saltar os termos)
+  //   - termos por aceitar -> mostra o modal
   useEffect(() => {
     if (isLocalLoading || !isLocalAuthenticated) return
     if (termsAlreadyAccepted()) {
@@ -144,7 +143,7 @@ export default function LoginPage() {
 
   return (
     <div style={pageWrapStyle}>
-      {/* Fundo total em vidro, com reflexo fosco tipo gráfico de trading */}
+      {/* Fundo com reflexo tipo gráfico de trading */}
       <GlassChartBackground />
 
       {/* Bandeiras — topo, centradas na horizontal */}
@@ -158,12 +157,12 @@ export default function LoginPage() {
             onClick={() => setActiveLang(f.code)}
             style={flagBtnStyle(activeLang === f.code)}
           >
-            <span style={{ fontSize: 17, lineHeight: 1 }}>{f.emoji}</span>
+            <f.Flag style={{ width: 20, height: 14, borderRadius: 2, display: 'block' }} />
           </button>
         ))}
       </div>
 
-      {/* Cartão de entrada — liso, sem moldura */}
+      {/* Cartão de entrada */}
       <div className="card fade-in" style={cardStyle}>
         <div style={{ textAlign: 'center' }}>
           <div className="brand" style={{ justifyContent: 'center', marginBottom: 10 }}>
@@ -173,25 +172,31 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginTop: 26 }}>
-          <div style={{ marginBottom: 18 }}>
+          <div style={{ marginBottom: 16 }}>
             <label style={labelStyle} htmlFor="email">Email</label>
-            <input
-              id="email" type="email" autoComplete="email" style={cleanInputStyle}
-              value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="teu@email.com" disabled={isSubmitting}
-            />
+            <div style={fieldWrapStyle}>
+              <IoMailOutline size={18} style={fieldIconStyle} />
+              <input
+                id="email" type="email" autoComplete="email" style={cleanInputStyle}
+                value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="teu@email.com" disabled={isSubmitting}
+              />
+            </div>
           </div>
 
           <div style={{ marginBottom: 8 }}>
             <label style={labelStyle} htmlFor="password">Senha</label>
-            <input
-              id="password" type="password" autoComplete="current-password" style={cleanInputStyle}
-              value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres" disabled={isSubmitting}
-            />
+            <div style={fieldWrapStyle}>
+              <IoLockClosedOutline size={18} style={fieldIconStyle} />
+              <input
+                id="password" type="password" autoComplete="current-password" style={cleanInputStyle}
+                value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres" disabled={isSubmitting}
+              />
+            </div>
           </div>
 
-          <div style={{ textAlign: 'right', marginBottom: 22 }}>
+          <div style={{ textAlign: 'right', marginBottom: 20 }}>
             <button type="button" onClick={handleForgotPassword} style={linkBtnStyle}>
               Esqueci a senha
             </button>
@@ -204,24 +209,23 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p style={{ color: 'var(--text-faint)', fontSize: 12, textAlign: 'center', marginTop: 22, lineHeight: 1.6 }}>
+        <p style={{ color: 'var(--text-faint)', fontSize: 12, textAlign: 'center', marginTop: 20, lineHeight: 1.6 }}>
           Primeira vez aqui? Basta escrever o teu email e uma senha — a conta é criada automaticamente.
         </p>
 
-        <div style={{ marginTop: 24, textAlign: 'center' }}>
+        <div style={{ marginTop: 20, textAlign: 'center' }}>
           <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
         </div>
       </div>
 
-      {/* Modal flutuante, centrado — Termos e Condições da Nexora e da Deriv,
-          exigido logo após entrar, antes de continuar */}
+      {/* Modal — Termos e Condições da Nexora e da Deriv */}
       {showTerms && <TermsModal onAccept={handleAcceptTerms} onDecline={handleDeclineTerms} />}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Modal de Termos e Condições — flutua no centro da página
+// Modal de Termos e Condições
 // ---------------------------------------------------------------------------
 function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void }) {
   const [tab, setTab] = useState<'nexora' | 'deriv'>('nexora')
@@ -238,7 +242,7 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
           <button
             onClick={() => setTab('nexora')}
             style={{
-              flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+              flex: 1, padding: '14px 0', fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
               color: tab === 'nexora' ? 'var(--white)' : 'var(--text-faint)',
               borderBottom: tab === 'nexora' ? '2px solid var(--blue-hi)' : '2px solid transparent',
             }}
@@ -248,7 +252,7 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
           <button
             onClick={() => setTab('deriv')}
             style={{
-              flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+              flex: 1, padding: '14px 0', fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
               color: tab === 'deriv' ? 'var(--white)' : 'var(--text-faint)',
               borderBottom: tab === 'deriv' ? '2px solid var(--blue-hi)' : '2px solid transparent',
             }}
@@ -257,14 +261,14 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
           </button>
         </div>
 
-        <div className="glass-sheet-body" style={{ maxHeight: 320, padding: 18 }}>
+        <div className="glass-sheet-body" style={{ padding: 18 }}>
           {tab === 'nexora' ? (
-            <pre style={{ color: 'var(--text-dim)', fontSize: 11.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-body)' }}>
+            <pre style={{ color: 'var(--text-dim)', fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-body)' }}>
               {TERMOS_NEXORA}
             </pre>
           ) : (
             <div>
-              <p style={{ color: 'var(--text-dim)', fontSize: 12.5, lineHeight: 1.7, marginBottom: 14 }}>
+              <p style={{ color: 'var(--text-dim)', fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
                 Ao ligar a tua conta Deriv através da Nexora Forex, estás também
                 sujeito aos termos e condições gerais da Deriv, que regulam a
                 abertura de conta, depósitos, levantamentos e a negociação de
@@ -281,10 +285,7 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
                 }}
               >
                 Ver termos completos da Deriv
-                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
+                <IoOpenOutline size={14} />
               </a>
             </div>
           )}
@@ -304,7 +305,7 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
 }
 
 // ---------------------------------------------------------------------------
-// Fundo de vidro com reflexo de gráfico (puramente decorativo)
+// Fundo com reflexo de gráfico (puramente decorativo)
 // ---------------------------------------------------------------------------
 function GlassChartBackground() {
   return (
@@ -322,14 +323,12 @@ function GlassChartBackground() {
         }
       `}</style>
 
-      {/* base escura em vidro */}
       <div style={{
         position: 'fixed', inset: 0,
         background: 'linear-gradient(160deg, #05070c 0%, #0a0e17 45%, #05070c 100%)',
         zIndex: 0,
       }} />
 
-      {/* reflexo de gráfico, fosco, tipo água/vidro */}
       <svg
         viewBox="0 0 1200 800"
         preserveAspectRatio="none"
@@ -362,11 +361,9 @@ function GlassChartBackground() {
         />
       </svg>
 
-      {/* véu de vidro por cima de tudo — dá o efeito "vidro limpo" */}
       <div style={{
         position: 'fixed', inset: 0, zIndex: 1,
         background: 'radial-gradient(circle at 50% 20%, rgba(255,255,255,0.05), transparent 60%)',
-        backdropFilter: 'blur(0.5px)',
         animation: 'nexora-sheen 8s ease-in-out infinite',
         pointerEvents: 'none',
       }} />
@@ -377,49 +374,59 @@ function GlassChartBackground() {
 // ---------------------------------------------------------------------------
 // Estilos
 // ---------------------------------------------------------------------------
+
+// O wrapper rola em vez de cortar: com teclado aberto ou ecrã baixo
+// o cartão nunca fica escondido em cima/baixo.
 const pageWrapStyle: React.CSSProperties = {
   position: 'relative', minHeight: '100dvh',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  padding: 16, overflow: 'hidden',
+  display: 'flex', justifyContent: 'center',
+  padding: 'calc(64px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px))',
+  overflowY: 'auto', overflowX: 'hidden',
 }
 
 const flagsRowStyle: React.CSSProperties = {
-  position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)',
+  position: 'fixed', top: 'calc(16px + env(safe-area-inset-top, 0px))', left: '50%', transform: 'translateX(-50%)',
   display: 'flex', gap: 10, zIndex: 20,
 }
 
 const flagBtnStyle = (active: boolean): React.CSSProperties => ({
-  width: 34, height: 34, borderRadius: '50%',
+  width: 38, height: 38, borderRadius: '50%',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
-  backdropFilter: 'blur(10px)',
+  background: active ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)',
   border: 'none',
   cursor: 'pointer', transition: 'all 0.2s ease',
-  boxShadow: active ? '0 0 0 3px rgba(24,87,255,0.15)' : 'none',
+  boxShadow: active ? '0 0 0 3px rgba(118,131,255,0.35)' : 'none',
 })
 
 const cardStyle: React.CSSProperties = {
   position: 'relative', zIndex: 10,
   width: '100%', maxWidth: 400,
-  padding: 'clamp(28px, 6vw, 48px) clamp(20px, 5vw, 36px) clamp(24px, 5vw, 36px)',
-  borderRadius: 28,
-  border: 'none',
-  boxShadow: 'none',
-  background: 'rgba(255,255,255,0.035)',
-  backdropFilter: 'blur(28px) saturate(150%)',
-  WebkitBackdropFilter: 'blur(28px) saturate(150%)',
+  margin: 'auto 0',
+  padding: 'clamp(24px, 6vw, 44px) clamp(18px, 5vw, 32px) clamp(22px, 5vw, 32px)',
+  borderRadius: 24,
+  background: 'rgba(20,23,31,0.88)',
+  border: '1px solid var(--border)',
+}
+
+const fieldWrapStyle: React.CSSProperties = {
+  position: 'relative', display: 'flex', alignItems: 'center',
+}
+
+const fieldIconStyle: React.CSSProperties = {
+  position: 'absolute', left: 14, color: 'var(--text-faint)', pointerEvents: 'none',
 }
 
 const cleanInputStyle: React.CSSProperties = {
   ...inputStyle,
-  background: 'transparent',
-  border: 'none',
-  borderBottom: '1px solid rgba(255,255,255,0.14)',
-  borderRadius: 0,
-  padding: '10px 2px',
+  width: '100%',
+  minHeight: 48,
+  background: 'var(--bg-card-hi)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  padding: '12px 14px 12px 42px',
 }
 
 const linkBtnStyle: React.CSSProperties = {
-  color: 'var(--text-faint)', fontSize: 12.5,
-  background: 'none', border: 'none', cursor: 'pointer',
+  color: 'var(--text-faint)', fontSize: 13,
+  background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
 }
