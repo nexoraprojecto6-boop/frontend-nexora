@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react'
-import { api, LocalUser } from '../lib/api'
+import { api, HttpError, LocalUser } from '../lib/api'
 import type { Account } from '../lib/types'
 
 interface AuthContextType {
-  // Sessão Deriv (OAuth) — inalterado, controla acesso ao dashboard/trading
+  // Sessão Deriv (OAuth) — controla acesso ao dashboard/trading
   isAuthenticated: boolean
   isLoading: boolean
   accounts: Account[]
@@ -13,8 +13,7 @@ interface AuthContextType {
   refreshAccounts: () => Promise<void>
   login: (token: string) => Promise<boolean>
 
-  // Sessão local (nome, whatsapp, email + senha) — controla acesso
-  // ao ecrã "Conectar à Deriv"
+  // Sessão local (email + senha) — controla acesso ao ecrã "Conectar à Deriv"
   isLocalAuthenticated: boolean
   isLocalLoading: boolean
   localUser: LocalUser | null
@@ -26,12 +25,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // ── Leitura síncrona do localStorage para o estado inicial ─────
-// CRÍTICO para a identificação de admin ser instantânea: se
-// isto corresse dentro de um useEffect (como antes), haveria
-// sempre pelo menos um render com role="desconhecido" antes do
-// valor real aparecer — abrindo espaço para mostrar a versão
-// errada do dashboard por um instante. Lendo aqui, o primeiro
-// render já nasce com o role correto.
+// Faz o primeiro render já nascer com o role correto (admin
+// identificado sem piscar a versão errada do dashboard).
 function readStoredLocalUser(): LocalUser | null {
   try {
     const stored = localStorage.getItem('localUser')
@@ -52,12 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentAccount, setCurrentAccountState] = useState<Account | null>(null)
   const initialCheckDone = useRef(false)
 
-  // Estado inicial já resolvido de forma síncrona — não há "loading"
-  // para a sessão local, porque o valor já está disponível no
-  // exato momento em que o componente monta.
+  // A sessão local nasce resolvida de forma síncrona (não há "loading").
   const [isLocalAuthenticated, setIsLocalAuthenticated] = useState(hasStoredLocalToken)
-  const [isLocalLoading, setIsLocalLoading] = useState(false)
   const [localUser, setLocalUser] = useState<LocalUser | null>(readStoredLocalUser)
+  const isLocalLoading = false
 
   const isAdmin = localUser?.role === 'admin'
 
@@ -92,10 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initialCheckDone.current) return
     initialCheckDone.current = true
 
-    // Sessão local: já resolvida de forma síncrona no useState acima.
-    // Nada a fazer aqui — mantido apenas o fluxo da sessão Deriv.
-
-    // Sessão Deriv
     const token = localStorage.getItem('token')
     if (!token) {
       setIsLoading(false)
@@ -118,6 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return ok
   }, [loadAccounts])
 
+  // ── Sessão local ────────────────────────────────────────────
+
   const loginLocal = useCallback((token: string, user: LocalUser) => {
     localStorage.setItem('localToken', token)
     localStorage.setItem('localUser', JSON.stringify(user))
@@ -131,6 +122,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLocalUser(null)
     setIsLocalAuthenticated(false)
   }, [])
+
+  // Ao abrir a app, confirma a sessão local no servidor em segundo plano:
+  //   - 401 (conta apagada, bloqueada ou token expirado) -> termina a sessão
+  //   - sucesso -> sincroniza o utilizador guardado (role, nome...)
+  //   - rede/servidor em baixo -> mantém a sessão guardada
+  useEffect(() => {
+    if (!hasStoredLocalToken()) return
+    let active = true
+
+    api.getLocalMe()
+      .then(({ user }) => {
+        if (!active) return
+        localStorage.setItem('localUser', JSON.stringify(user))
+        setLocalUser(user)
+      })
+      .catch((e) => {
+        if (active && e instanceof HttpError && e.status === 401) logoutLocal()
+      })
+
+    return () => { active = false }
+  }, [logoutLocal])
+
+  // ── Contas Deriv ────────────────────────────────────────────
 
   const setCurrentAccount = async (account: Account) => {
     setCurrentAccountState(account)
