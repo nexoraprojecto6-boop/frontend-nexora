@@ -3,51 +3,25 @@
 //
 // Réplica do layout Over/Under do dtrader.deriv.com.
 // Gráfico e percentagens: MESMA lógica do ChartSection.tsx
-// (ligação pública direta à Deriv — não passa pelo backend,
-// não depende do BotsProvider/TradingContext para os dados).
+// (ligação pública direta à Deriv — não passa pelo backend).
 // Compra: usa useBots().manualBuy() (backend, via useNexoraWs).
+// Mercados: Over / Under / Matches / Differs
+// (DIGITOVER / DIGITUNDER / DIGITMATCH / DIGITDIFF).
+// Saldo em tempo real via useTrading; histórico via <TradesTable/>.
+// Página auto-contida: monta o seu próprio <BotsProvider/>.
 //
-// ALTERAÇÃO (implementação final):
-//   - Mercado seleccionável: Over / Under / Matches / Differs
-//     (mapeado para DIGITOVER / DIGITUNDER / DIGITMATCH / DIGITDIFF)
-//   - Validação de dígito por mercado (Over não aceita 9,
-//     Under não aceita 0 — a Deriv rejeitaria a proposta)
-//   - Saldo em tempo real (useTrading) — mesma fonte usada em
-//     todo o resto da app, populada via mensagem `balance` do
-//     backend (não abre ligação própria)
-//   - Histórico de trades: reaproveita <TradesTable/>, que já
-//     mostra trades manuais (BotsContext regista-os no mesmo
-//     `trading._addTrade` usado pelos bots)
-//   - Página auto-contida: monta o seu próprio <BotsProvider/>,
-//     seguindo o mesmo padrão do DashboardPage.tsx. Assume que
-//     <TradingProvider/> já envolve as rotas mais acima (tal
-//     como acontece para o Dashboard).
-//
-// ALTERAÇÃO (responsividade — layout sem scroll de página):
-//   - A página ocupa exactamente 100dvh e não rola. Apenas o
-//     bloco de histórico de trades (<TradesTable/>) tem scroll
-//     interno, via CSS grid + `.op-history { overflow-y:auto }`.
-//   - Desktop (>=860px): 2 colunas — esquerda (gráfico + painel
-//     de operar empilhados, minimizando altura) e direita
-//     (histórico), lado a lado, cada uma ocupando 100% da altura
-//     disponível.
-//   - Mobile / ecrãs estreitos (<860px): 1 coluna — gráfico em
-//     cima, depois o painel de operar (dígitos/duração/stake/
-//     comprar), por fim o histórico a ocupar o espaço restante
-//     com scroll próprio.
-//   - O painel de operar foi tornado mais compacto (duração,
-//     stake e botão comprar numa única linha) para caber junto
-//     ao gráfico sem empurrar o histórico para fora do ecrã.
-//   - Telemóveis muito estreitos (<380px): a linha
-//     duração/stake/comprar passa a empilhar em coluna, para
-//     nenhum dos três campos ficar espremido.
-//   - Nenhuma lógica de dados/estado foi alterada — apenas a
-//     estrutura visual (JSX/CSS) do layout.
+// LAYOUT RESPONSIVO:
+//   - Desktop (>=860px): 2 colunas, 100dvh fixo; só o histórico rola.
+//   - Mobile (<860px): 1 coluna (gráfico → painel → histórico).
+//     A página só rola se a soma não couber no ecrã — nada é cortado.
+//   - <380px: duração/stake/comprar empilham em coluna.
+// Nenhuma lógica de dados/estado foi alterada.
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
+import { IoArrowBack, IoSwapHorizontal, IoChevronDown, IoCheckmark, IoClose } from 'react-icons/io5'
 import { BotsProvider, useBots } from '../context/BotsContext'
 import { useTrading } from '../context/TradingContext'
 import { useAuth } from '../context/AuthContext'
@@ -101,19 +75,9 @@ function isDigitValidForMarket(market: MarketType, digit: number): boolean {
 }
 
 // ── Portal: monta o conteúdo direto no <body>, fora de qualquer
-// container com overflow/scroll — mesma solução usada no
-// ControlsSection.tsx para o sheet de troca de conta ───────────
+// container com overflow/scroll ───────────────────────────────
 function Portal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body)
-}
-
-function IconRefresh() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" /><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-    </svg>
-  )
 }
 
 function lastDigit(q: number): number {
@@ -130,6 +94,12 @@ function calcAll(hist: number[], win: number) {
   const maxPct = Math.max(...pcts)
   const minPct = Math.min(...pcts)
   return { pcts, maxPct, minPct, total: slice.length }
+}
+
+// Estilo comum dos campos do painel
+const fieldStyle: React.CSSProperties = {
+  background: 'var(--bg-card-hi)', color: 'var(--text)', border: '1px solid var(--border)',
+  borderRadius: 10, padding: '8px 10px', fontSize: 14, width: '100%', minHeight: 40,
 }
 
 function OperarManualInner() {
@@ -175,9 +145,7 @@ function OperarManualInner() {
   }
 
   // ── Sinal WIN/LOSS sobre o dígito onde a última operação
-  // manual terminou. `manualTrades` vem sempre com o mais recente
-  // em primeiro (ver BotsContext: `[rec, ...prev]`), por isso
-  // basta observar manualTrades[0]. Some sozinho passado um tempo.
+  // manual terminou. `manualTrades` vem com o mais recente em primeiro.
   const [lastResult, setLastResult] = useState<{ id: string; digit: number; won: boolean } | null>(null)
   const lastResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -336,8 +304,7 @@ function OperarManualInner() {
   const maxBar = Math.max(...bars, 10)
 
   // Se o mercado mudar para um em que o dígito seleccionado deixa
-  // de ser válido (ex: estava em 9 e mudou para Under), ajusta
-  // automaticamente para o dígito válido mais próximo.
+  // de ser válido, ajusta para o dígito válido mais próximo.
   useEffect(() => {
     if (!isDigitValidForMarket(market, selectedDigit)) {
       setSelectedDigit(market === 'over' ? 8 : market === 'under' ? 1 : selectedDigit)
@@ -381,17 +348,14 @@ function OperarManualInner() {
       <div className="op-topbar">
         <button
           onClick={() => navigate(-1)}
-          style={{
-            background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)',
-            borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontSize: 13,
-          }}
+          className="op-back-btn"
         >
-          ← Voltar ao Dashboard
+          <IoArrowBack size={16} />
+          Voltar ao Dashboard
         </button>
       </div>
 
-      {/* ── Saldo / P&L do dia (inclui trades manuais e de bots) —
-          faixa fina, sempre em linha horizontal, mesmo no mobile ── */}
+      {/* ── Saldo / P&L do dia — faixa fina, sempre em linha horizontal ── */}
       <div className="card op-balance-card" style={{ opacity: tradingLoading ? 0.6 : 1 }}>
         <div className="op-stat">
           <p className="op-stat-label">Saldo</p>
@@ -415,28 +379,24 @@ function OperarManualInner() {
         </div>
 
         {/* ── Trocar de conta (Real/Demo) — ponta direita do card ── */}
-        <button onClick={() => setShowAccSheet(true)} className="btn-ghost op-acc-btn">
+        <button onClick={() => setShowAccSheet(true)} className="btn-ghost op-acc-btn" aria-label="Trocar de conta">
           <span className="op-acc-label" style={{ color: accColor }}>{accLabel}</span>
           <span className="op-acc-icon">
-            <IconRefresh />
+            <IoSwapHorizontal size={14} />
           </span>
         </button>
       </div>
 
-      {/* ── Corpo principal: gráfico+painel numa coluna, histórico
-          na outra (desktop) — empilhado em 1 coluna (mobile) ── */}
+      {/* ── Corpo principal ── */}
       <div className="op-main">
         <div className="op-left">
           {/* ---------------- Gráfico + dígitos ---------------- */}
           <div className="card op-chart-card">
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-              padding: '8px 12px', borderBottom: '1px solid var(--border)', flex: '0 0 auto',
-            }}>
+            <div className="op-chart-head">
               <select
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value)}
-                style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 4, padding: '6px 10px', fontSize: 13 }}
+                style={{ ...fieldStyle, width: 'auto', minHeight: 36, padding: '6px 10px', fontSize: 13 }}
               >
                 {SYMBOLS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
@@ -449,16 +409,16 @@ function OperarManualInner() {
                 {phase === 'live' ? 'Ligado' : phase === 'error' ? 'Erro' : 'A ligar…'}
               </span>
 
-              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)' }}>
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
                 {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
               </span>
 
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setWinOpen(o => !o)}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 4, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 10, padding: '6px 10px', minHeight: 36, fontSize: 12, cursor: 'pointer' }}
                 >
-                  {win} ▾
+                  {win} <IoChevronDown size={12} />
                 </button>
                 {winOpen && (
                   <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 30, padding: 4, minWidth: 90 }}>
@@ -466,7 +426,7 @@ function OperarManualInner() {
                       <button
                         key={w}
                         onClick={() => { setWin(w); setWinOpen(false) }}
-                        style={{ width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 6, fontSize: 13, background: 'transparent', color: win === w ? '#3ddc84' : 'var(--text)', fontWeight: win === w ? 700 : 400, cursor: 'pointer' }}
+                        style={{ width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, fontSize: 13, background: 'transparent', color: win === w ? '#3ddc84' : 'var(--text)', fontWeight: win === w ? 700 : 400, cursor: 'pointer' }}
                       >
                         {w}
                       </button>
@@ -487,7 +447,7 @@ function OperarManualInner() {
                       <span
                         key={lastResult.id}
                         style={{
-                          position: 'absolute', top: -26, left: '50%', transform: 'translateX(-50%)',
+                          position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',
                           display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap',
                           padding: '3px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 800,
                           letterSpacing: 0.4, color: '#0b0e14',
@@ -497,12 +457,14 @@ function OperarManualInner() {
                           zIndex: 5,
                         }}
                       >
-                        {lastResult.won ? '✓ WIN' : '✕ LOSS'}
+                        {lastResult.won ? <IoCheckmark size={12} /> : <IoClose size={12} />}
+                        {lastResult.won ? 'WIN' : 'LOSS'}
                       </span>
                     )}
                     <span style={{ fontSize: 11.5, color: 'var(--text)', lineHeight: 1 }}>{pct.toFixed(1)}%</span>
                     <div style={{
                       width: '100%', height: `${Math.min(94, Math.max(4, ratio * 100))}%`, background: color,
+                      borderRadius: 3,
                       outline: showResult ? `2px solid ${lastResult?.won ? '#3ddc84' : '#ff5c5c'}` : 'none',
                       outlineOffset: 1,
                     }} />
@@ -516,15 +478,15 @@ function OperarManualInner() {
           {/* ---------------- Painel de operação manual (compacto) ---------------- */}
           <div className="card op-panel">
             {/* Selector de mercado: Over / Under / Matches / Differs */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, background: 'var(--border)', borderRadius: 10, padding: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 4, background: 'var(--bg-card-hi)', borderRadius: 12, padding: 4 }}>
               {(['over', 'under', 'matches', 'differs'] as MarketType[]).map(m => (
                 <button
                   key={m}
                   onClick={() => setMarket(m)}
                   style={{
-                    padding: '7px 0', background: market === m ? '#3ddc84' : 'transparent',
+                    padding: '9px 0', minHeight: 38, background: market === m ? '#3ddc84' : 'transparent',
                     color: market === m ? '#0b0e14' : 'var(--text-dim)', border: 'none',
-                    borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    borderRadius: 9, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
                   {MARKET_LABELS[m]}
@@ -552,8 +514,8 @@ function OperarManualInner() {
                     disabled={!valid}
                     title={!valid ? 'Indisponível para este mercado' : undefined}
                     style={{
-                      background: 'var(--border)', border: isSelected ? '1px solid #3ddc84' : '1px solid transparent',
-                      borderRadius: 6, padding: '7px 0', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      background: 'var(--bg-card-hi)', border: isSelected ? '1px solid #3ddc84' : '1px solid transparent',
+                      borderRadius: 10, padding: '7px 0', display: 'flex', flexDirection: 'column', alignItems: 'center',
                       cursor: valid ? 'pointer' : 'not-allowed', opacity: valid ? 1 : 0.35,
                     }}
                   >
@@ -568,21 +530,20 @@ function OperarManualInner() {
 
             {displayError && <p style={{ fontSize: 12, color: '#ff5c5c', margin: '8px 0 0' }}>{displayError}</p>}
 
-            {/* Duração + Stake + Comprar — em linha (desktop/tablet), empilhado
-                em coluna nos telemóveis muito estreitos via .op-panel-row */}
-            <div className="op-panel-row" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 100px', minWidth: 90 }}>
+            {/* Duração + Stake + Comprar — em linha; empilha em coluna nos <380px */}
+            <div className="op-panel-row">
+              <div className="op-field">
                 <label style={{ fontSize: 11, color: 'var(--text-dim)' }}>Duração</label>
                 <select
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
-                  style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 6, padding: '8px 10px', fontSize: 13, width: '100%' }}
+                  style={fieldStyle}
                 >
                   {DURATIONS.map(d => <option key={d} value={d}>{d} ticks</option>)}
                 </select>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 100px', minWidth: 90 }}>
+              <div className="op-field">
                 <label style={{ fontSize: 11, color: 'var(--text-dim)' }}>Stake (USD)</label>
                 <input
                   type="number"
@@ -590,18 +551,15 @@ function OperarManualInner() {
                   step={0.5}
                   value={stake}
                   onChange={(e) => setStake(Number(e.target.value))}
-                  style={{ background: 'var(--border)', color: 'var(--text)', border: 'none', borderRadius: 6, padding: '8px 10px', fontSize: 13, width: '100%' }}
+                  style={fieldStyle}
                 />
               </div>
 
               <button
                 onClick={handleBuy}
                 disabled={isBusy}
-                style={{
-                  flex: '1 1 150px', minWidth: 140, background: '#3ddc84', border: 'none', borderRadius: 6,
-                  padding: '10px 0', color: '#0b0e14', fontWeight: 700, fontSize: 13,
-                  cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.6 : 1,
-                }}
+                className="op-buy-btn"
+                style={{ cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.6 : 1 }}
               >
                 {isBusy ? 'Contrato em aberto…' : `Comprar ${MARKET_LABELS[market]}`}
               </button>
@@ -609,7 +567,7 @@ function OperarManualInner() {
           </div>
         </div>
 
-        {/* ---------------- Histórico de operações (única secção com scroll) ---------------- */}
+        {/* ---------------- Histórico de operações (secção com scroll) ---------------- */}
         <div className="op-history">
           <TradesTable />
         </div>
@@ -618,15 +576,19 @@ function OperarManualInner() {
       <style>{`
         .op-page {
           height: 100dvh;
-          min-height: 100vh;
           display: flex;
           flex-direction: column;
           overflow: hidden;
-          padding: 14px;
+          padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px));
           box-sizing: border-box;
           background: var(--bg, #0b0e14);
         }
         .op-topbar { flex: 0 0 auto; margin-bottom: 8px; }
+        .op-back-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          background: transparent; border: 1px solid var(--border); color: var(--text);
+          border-radius: 10px; padding: 0 14px; min-height: 38px; cursor: pointer; font-size: 13px;
+        }
 
         /* Faixa de saldo: fina, sempre em linha (nunca quebra),
            rola na horizontal só se realmente faltar espaço. */
@@ -648,12 +610,12 @@ function OperarManualInner() {
         .op-stat-unit { font-size: 11px; color: var(--text-dim); }
         .op-acc-btn {
           margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
-          padding: 6px 10px; border-radius: 9px; cursor: pointer; white-space: nowrap;
+          padding: 6px 10px; border-radius: 10px; cursor: pointer; white-space: nowrap; min-height: 36px;
         }
         .op-acc-label { font-size: 12px; font-weight: 700; white-space: nowrap; }
         .op-acc-icon {
           display: flex; align-items: center; justify-content: center;
-          width: 20px; height: 20px; border-radius: 6px;
+          width: 22px; height: 22px; border-radius: 7px;
           background: rgba(255,255,255,0.08); color: var(--text-dim);
         }
 
@@ -666,33 +628,6 @@ function OperarManualInner() {
           grid-template-rows: minmax(150px, 0.85fr) auto minmax(160px, 1.15fr);
         }
 
-        /* Mobile: faixa de saldo ainda mais fina — sobra mais altura
-           para o gráfico (que sobe) e para o histórico (que ganha
-           mais espaço). Continua tudo alinhado em linha horizontal. */
-        @media (max-width: 859px) {
-          .op-page { padding: 10px; }
-          .op-topbar { margin-bottom: 6px; }
-          .op-topbar button { padding: 5px 12px !important; font-size: 12px !important; }
-          .op-balance-card { padding: 6px 12px; gap: 14px; margin-bottom: 6px; }
-          .op-stat-label { font-size: 9.5px; }
-          .op-stat-value { font-size: 13.5px; }
-          .op-stat-unit { font-size: 10px; }
-          .op-acc-btn { padding: 5px 8px; }
-          .op-acc-label { font-size: 11px; }
-          .op-acc-icon { width: 18px; height: 18px; }
-          .op-main { grid-template-rows: minmax(140px, 0.8fr) auto minmax(180px, 1.2fr); }
-        }
-
-        /* Telemóveis muito estreitos — duração/stake/comprar empilham
-           em coluna em vez de espremer três campos numa só linha */
-        @media (max-width: 380px) {
-          .op-page { padding: 8px; }
-          .op-panel { padding: 10px 12px; }
-          .op-panel-row { flex-direction: column; align-items: stretch !important; }
-          .op-panel-row > div, .op-panel-row > button { min-width: 0 !important; flex: 1 1 auto !important; }
-          .op-chart-bars { padding: 16px 8px 6px; gap: 4px; }
-        }
-
         .op-left { display: contents; }
 
         .op-chart-card {
@@ -701,13 +636,17 @@ function OperarManualInner() {
           display: flex;
           flex-direction: column;
         }
+        .op-chart-head {
+          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+          padding: 8px 12px; border-bottom: 1px solid var(--border); flex: 0 0 auto;
+        }
         .op-chart-bars {
           flex: 1 1 auto;
           min-height: 0;
           display: flex;
           align-items: flex-end;
           gap: 6px;
-          padding: 20px 12px 6px;
+          padding: 26px 12px 6px;
           position: relative;
           overflow: hidden;
         }
@@ -720,6 +659,14 @@ function OperarManualInner() {
           display: flex;
           flex-direction: column;
         }
+        .op-panel-row {
+          display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-top: 10px;
+        }
+        .op-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 100px; min-width: 90px; }
+        .op-buy-btn {
+          flex: 1 1 150px; min-width: 140px; background: #3ddc84; border: none; border-radius: 12px;
+          min-height: 44px; padding: 10px 0; color: #0b0e14; font-weight: 700; font-size: 14px;
+        }
 
         .op-history {
           min-height: 0;
@@ -727,6 +674,35 @@ function OperarManualInner() {
           -webkit-overflow-scrolling: touch;
         }
 
+        /* ── Mobile / ecrãs estreitos: 1 coluna. A página rola só se
+           a soma não couber — nada é cortado. ── */
+        @media (max-width: 859px) {
+          .op-page { padding: calc(10px + env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px)); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+          .op-topbar { margin-bottom: 6px; }
+          .op-back-btn { min-height: 34px; font-size: 12px; padding: 0 12px; }
+          .op-balance-card { padding: 6px 12px; gap: 14px; margin-bottom: 6px; }
+          .op-stat-label { font-size: 9.5px; }
+          .op-stat-value { font-size: 13.5px; }
+          .op-stat-unit { font-size: 10px; }
+          .op-acc-btn { padding: 5px 8px; }
+          .op-acc-label { font-size: 11px; }
+          .op-acc-icon { width: 20px; height: 20px; }
+          .op-main {
+            flex: 0 0 auto;
+            grid-template-rows: clamp(150px, 26dvh, 230px) auto 280px;
+          }
+        }
+
+        /* Telemóveis muito estreitos — duração/stake/comprar empilham */
+        @media (max-width: 380px) {
+          .op-page { padding-left: 8px; padding-right: 8px; }
+          .op-panel { padding: 10px 12px; }
+          .op-panel-row { flex-direction: column; align-items: stretch; }
+          .op-field, .op-buy-btn { min-width: 0; flex: 1 1 auto; }
+          .op-chart-bars { padding: 26px 8px 6px; gap: 4px; }
+        }
+
+        /* Desktop: 2 colunas, 100dvh fixo; só o histórico rola */
         @media (min-width: 860px) {
           .op-main {
             grid-template-columns: minmax(0, 1fr) 380px;
@@ -743,9 +719,7 @@ function OperarManualInner() {
           .op-history { height: 100%; }
         }
 
-        /* Ecrãs grandes (desktops largos) — o painel de operar ganha
-           um teto de largura para não ficar espremido contra o gráfico
-           num monitor ultra-wide */
+        /* Monitores largos — o painel de operar ganha um teto de largura */
         @media (min-width: 1440px) {
           .op-panel { max-width: 720px; }
         }
@@ -757,7 +731,7 @@ function OperarManualInner() {
         }
       `}</style>
 
-      {/* ── Sheet em vidro: Selecionar Tipo de Conta (via Portal) —
+      {/* ── Sheet: Selecionar Tipo de Conta (via Portal) —
           mesmo componente/estilo do ControlsSection.tsx ── */}
       {showAccSheet && (
         <Portal>
@@ -766,7 +740,9 @@ function OperarManualInner() {
               <div className="glass-sheet-header">
                 <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>Selecionar Tipo de Conta</p>
                 {!switchingAcc && (
-                  <button onClick={() => setShowAccSheet(false)} style={{ color: 'var(--text-faint)', fontSize: 16, padding: 4 }}>✕</button>
+                  <button onClick={() => setShowAccSheet(false)} aria-label="Fechar" style={{ color: 'var(--text-faint)', padding: 6, display: 'inline-flex' }}>
+                    <IoClose size={20} />
+                  </button>
                 )}
               </div>
               {switchingAcc ? (
@@ -797,8 +773,7 @@ function OperarManualInner() {
 }
 
 // ── Página auto-contida: monta o seu próprio BotsProvider,
-// igual ao DashboardPage.tsx, para poder ser usada em qualquer
-// rota sem depender de um provider já montado acima. ──────────
+// igual ao DashboardPage.tsx. ──────────────────────────────────
 export default function OperarManualPage() {
   return (
     <BotsProvider>
