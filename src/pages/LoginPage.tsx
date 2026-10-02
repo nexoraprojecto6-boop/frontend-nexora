@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
@@ -40,6 +40,10 @@ Para questões, contacte-nos via WhatsApp: +244976289984`
 const DERIV_TERMS_URL = 'https://deriv.com/tnc/general-terms.pdf'
 const TERMS_ACCEPTED_KEY = 'nexora_terms_accepted_v1'
 
+function termsAlreadyAccepted(): boolean {
+  try { return localStorage.getItem(TERMS_ACCEPTED_KEY) === '1' } catch { return false }
+}
+
 // ---------------------------------------------------------------------------
 // Marca — logótipo 100% em SVG/código, sem ficheiro de imagem (evita
 // builds partidos por falta de logo.png e escala em qualquer ecrã).
@@ -63,7 +67,7 @@ function BrandMark({ size = 40 }: { size?: number }) {
 export default function LoginPage() {
   const navigate = useNavigate()
   const { show, hide } = useLoader() as any // hide pode não existir consoante a versão do contexto
-  const { isLocalAuthenticated, isLocalLoading, loginLocal, logout } = useAuth() as any
+  const { isLocalAuthenticated, isLocalLoading, loginLocal, logoutLocal } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -72,65 +76,44 @@ export default function LoginPage() {
   const [activeLang, setActiveLang] = useState('ao')
   const [showTerms, setShowTerms] = useState(false)
 
-  // Distingue "já estava autenticado ao abrir a página" (ex: refresh)
-  // de "acabou de fazer login agora mesmo, aqui, neste formulário".
-  // Sem isto, o useEffect abaixo navega sozinho para /connect-deriv
-  // assim que loginLocal() atualiza o contexto — antes do modal de
-  // termos ter hipótese de aparecer.
-  const justLoggedInRef = useRef(false)
-
+  // Fonte única de verdade para "o que acontece quando há sessão local":
+  //   - termos já aceites  -> segue para /connect-deriv
+  //   - termos por aceitar -> mostra o modal (também após um refresh,
+  //                           para não dar para saltar os termos)
   useEffect(() => {
-    if (!isLocalLoading && isLocalAuthenticated && !justLoggedInRef.current) {
-      navigate('/connect-deriv')
+    if (isLocalLoading || !isLocalAuthenticated) return
+    if (termsAlreadyAccepted()) {
+      navigate('/connect-deriv', { replace: true })
+    } else {
+      setShowTerms(true)
     }
-  }, [isLocalLoading, isLocalAuthenticated])
+  }, [isLocalLoading, isLocalAuthenticated, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (!email.trim() || !password) {
+    const cleanEmail = email.trim()
+    if (!cleanEmail || !password) {
       setError('Preenche o email e a senha.')
+      return
+    }
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      setError('Email inválido.')
       return
     }
 
     setIsSubmitting(true)
     show('A entrar...')
     try {
-      const res = await api.loginLocal(email.trim(), password)
-
-      // Marca ANTES de atualizar o contexto de auth, para o useEffect
-      // não disparar a navegação automática enquanto decidimos aqui
-      // se é preciso mostrar o modal de termos primeiro.
-      justLoggedInRef.current = true
-      loginLocal(res.token, res.user)
-
-      // Depois de autenticar, mostra o modal de Termos e Condições no
-      // centro do ecrã antes de avançar — só passa para a próxima página
-      // quando o utilizador confirmar que leu e aceita.
-      let alreadyAccepted = false
-      try { alreadyAccepted = localStorage.getItem(TERMS_ACCEPTED_KEY) === '1' } catch { /* ignora */ }
-
-      try { hide?.() } catch { /* opcional */ }
-
-      if (alreadyAccepted) {
-        navigate('/connect-deriv')
-      } else {
-        setShowTerms(true)
-      }
+      // O backend entra se o email existe e cria a conta se for novo.
+      const res = await api.loginLocal(cleanEmail, password)
+      loginLocal(res.token, res.user) // o useEffect acima decide o passo seguinte
     } catch (err: any) {
-      // Credenciais erradas → 401 do backend. Mostramos a mensagem certa
-      // em vez de deixar o loader a girar para sempre.
-      const msg = err?.message || 'Não foi possível entrar.'
-      if (msg.includes('401') || msg.toLowerCase().includes('inválid') || msg.toLowerCase().includes('incorret')) {
-        setError('Email ou senha incorretos.')
-      } else {
-        setError(msg)
-      }
-      justLoggedInRef.current = false
-      try { hide?.() } catch { /* opcional, LoaderContext pode não ter hide() */ }
+      setError(err?.message || 'Não foi possível entrar.')
     } finally {
       setIsSubmitting(false)
+      try { hide?.() } catch { /* LoaderContext pode não ter hide() */ }
     }
   }
 
@@ -141,22 +124,14 @@ export default function LoginPage() {
   const handleAcceptTerms = () => {
     try { localStorage.setItem(TERMS_ACCEPTED_KEY, '1') } catch { /* ignora */ }
     setShowTerms(false)
-    navigate('/connect-deriv')
+    navigate('/connect-deriv', { replace: true })
   }
 
   const handleDeclineTerms = () => {
-    // Sem aceitar os termos não há acesso — termina a sessão local e
-    // volta ao ecrã de login.
+    // Sem aceitar os termos não há acesso: termina só a sessão local
+    // (não mexe na sessão Deriv) e fica no ecrã de entrada.
     setShowTerms(false)
-    justLoggedInRef.current = false
-    try {
-      if (typeof logout === 'function') {
-        logout()
-      } else {
-        localStorage.removeItem('token')
-      }
-    } catch { /* ignora */ }
-    navigate('/login', { replace: true })
+    logoutLocal()
   }
 
   if (isLocalLoading) {
@@ -188,7 +163,7 @@ export default function LoginPage() {
         ))}
       </div>
 
-      {/* Cartão de login — liso, sem moldura */}
+      {/* Cartão de entrada — liso, sem moldura */}
       <div className="card fade-in" style={cardStyle}>
         <div style={{ textAlign: 'center' }}>
           <div className="brand" style={{ justifyContent: 'center', marginBottom: 10 }}>
@@ -212,7 +187,7 @@ export default function LoginPage() {
             <input
               id="password" type="password" autoComplete="current-password" style={cleanInputStyle}
               value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••" disabled={isSubmitting}
+              placeholder="Mínimo 6 caracteres" disabled={isSubmitting}
             />
           </div>
 
@@ -229,25 +204,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '26px 0' }}>
-          <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-          <p style={{ color: 'var(--text-faint)', fontSize: 12 }}>Não tem conta?</p>
-          <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-        </div>
+        <p style={{ color: 'var(--text-faint)', fontSize: 12, textAlign: 'center', marginTop: 22, lineHeight: 1.6 }}>
+          Primeira vez aqui? Basta escrever o teu email e uma senha — a conta é criada automaticamente.
+        </p>
 
-        <div style={{ textAlign: 'center' }}>
-          <Link to="/register" style={{ color: 'var(--blue-hi)', fontSize: 14, fontWeight: 600 }}>
-            Criar conta
-          </Link>
-        </div>
-
-        <div style={{ marginTop: 30, textAlign: 'center' }}>
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
           <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
         </div>
       </div>
 
       {/* Modal flutuante, centrado — Termos e Condições da Nexora e da Deriv,
-          exigido logo após o login antes de continuar */}
+          exigido logo após entrar, antes de continuar */}
       {showTerms && <TermsModal onAccept={handleAcceptTerms} onDecline={handleDeclineTerms} />}
     </div>
   )
