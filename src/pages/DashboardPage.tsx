@@ -70,15 +70,22 @@ function DashboardLoader() {
 // ── Inner usa os contextos que só existem após BotsProvider ───
 function DashboardInner() {
   const navigate = useNavigate()
-  const { isLoading: authLoading } = useAuth()
+  const { isLoading: authLoading, isLocalAuthenticated } = useAuth()
   const { show, complete } = useLoader()
   const { notifications, hasUnread, markAllRead } = useNotifications()
   const [notifOpen, setNotifOpen] = useState(false)
   const [depositOpen, setDepositOpen] = useState(false)
 
+  // Sem sessão Deriv não há dashboard. Quem já entrou com email/senha
+  // vai direto para ligar a Deriv (sem passar pelo ecrã de entrada), e
+  // `replace` evita que o botão "voltar" prenda o utilizador num ciclo.
   useEffect(() => {
     const token = localStorage.getItem('token')
-    if (!token) { show('A redirecionar...'); navigate('/'); return }
+    if (!token) {
+      show('A redirecionar...')
+      navigate(isLocalAuthenticated ? '/connect-deriv' : '/', { replace: true })
+      return
+    }
     if (!authLoading) complete('Pronto!')
   }, [authLoading])
 
@@ -159,7 +166,7 @@ function DashboardInner() {
 
       {/* ── Desktop layout (≥1024px): chart+controls à esquerda, trades à direita ──
           Mobile (<1024px): ordem controlada via CSS (order), ver <style> abaixo.
-          Ordem mobile: Chart → Balance → Trades (rolável) → Controls (conexão Deriv) → Footer */}
+          Ordem mobile: Chart → Balance → Controls (conexão Deriv) → Trades (rolável) → Footer */}
       <main className="dash-main" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {/* Coluna esquerda */}
         <div className="dash-left-col" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 16px', gap: 12, overflowY: 'auto', minWidth: 0 }}>
