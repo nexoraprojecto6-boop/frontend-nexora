@@ -5,26 +5,19 @@
 // BotsProvider NÃO está aqui para as rotas gerais — cada página
 // que precisa dele (Dashboard, OperarManual) monta o seu próprio
 // <BotsProvider/> internamente. Isso evita que o WebSocket abra
-// antes do login, e evita — CORREÇÃO — dois BotsProvider
-// aninhados na mesma árvore, que abriam DUAS ligações WS para a
-// mesma conta e entravam num ciclo de reconexão infinito (cada
-// uma matava a outra via "sessão duplicada", que reconectava e
-// matava a primeira, sem nunca estabilizar — via disso no log:
-// "[WS] Sessão duplicada detectada" a repetir a cada poucos
-// segundos, sem fim).
+// antes do login e evita dois BotsProvider aninhados na mesma
+// árvore, que abriam DUAS ligações WS para a mesma conta e
+// entravam num ciclo de reconexão infinito ("sessão duplicada").
 //
-// CORREÇÃO (Operar Manual): a rota /operar-manual NÃO deve
-// envolver <OperarManualPage/> com <BotsProvider/> aqui — o
-// próprio OperarManualPage.tsx já o faz internamente (mesmo
-// padrão do DashboardPage.tsx). Envolver aqui TAMBÉM criava o
-// duplo provider acima descrito.
+// Entrada: o ecrã "/" (LoginPage) aceita email + senha e cria a
+// conta automaticamente se o email for novo. Não há página de
+// registo; /register redireciona para "/".
 // ============================================================
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { TradingProvider } from './context/TradingContext'
 import { LoaderProvider } from './context/LoaderContext'
 import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
 import ConnectDerivPage from './pages/ConnectDerivPage'
 import CallbackPage from './pages/CallbackPage'
 import DashboardPage from './pages/DashboardPage'
@@ -41,7 +34,7 @@ export default function App() {
           <TradingProvider>
             <Routes>
               <Route path="/" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/register" element={<Navigate to="/" replace />} />
               <Route path="/connect-deriv" element={<ConnectDerivPage />} />
               <Route path="/callback" element={<CallbackPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
