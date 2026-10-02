@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { IoNotifications, IoMenu, IoWalletOutline } from 'react-icons/io5'
 import { useAuth } from '../context/AuthContext'
 import { BotsProvider } from '../context/BotsContext'
 import { ChartSection } from '../components/ChartSection'
@@ -26,23 +27,13 @@ function formatRelative(ts: number): string {
   return `há ${d}d`
 }
 
-// Ícone de sino pequeno para o badge sobre o botão MENU
-function IconBellSmall() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  )
-}
-
 // ── DashboardLoader exibido enquanto o auth ainda carrega ─────
 function DashboardLoader() {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: 20,
-      background: 'rgba(7,11,20,0.97)', backdropFilter: 'blur(10px)',
+      background: 'rgba(11,13,18,0.97)',
     }}>
       <h1 className="logo-text" style={{ fontSize: 20 }}>NEXORA FOREX</h1>
       <div style={{ position: 'relative', width: 56, height: 56 }}>
@@ -93,37 +84,42 @@ function DashboardInner() {
 
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* ── Aba de notificações — flutua por cima de tudo, estilo vidro ── */}
+      {/* ── Aba de notificações — flutua por cima de tudo ── */}
       <NotificationBar />
 
       {/* ── Header ── */}
       <header style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 16px', background: 'var(--bg-elevated)',
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+        padding: 'calc(10px + env(safe-area-inset-top, 0px)) 16px 10px',
+        background: 'var(--bg-elevated)',
+        borderBottom: '1px solid var(--border)', flexShrink: 0, gap: 8,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="logo-text" style={{ fontSize: 16 }}>NEXORA FOREX</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <span className="logo-text" style={{ fontSize: 16, whiteSpace: 'nowrap' }}>NEXORA FOREX</span>
         </div>
 
-        {/* Botão DEPOSITAR + Botão MENU + sino de notificação sobreposto no canto ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Botão DEPOSITAR + Botão MENU + sino de notificação sobreposto no canto */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button
+            className="hdr-btn"
             onClick={() => setDepositOpen(true)}
             style={{
-              padding: '6px 12px', borderRadius: 8,
               border: '1px solid var(--border)',
               background: 'rgba(24,87,255,0.10)',
               color: 'var(--blue-hi)', fontWeight: 700, fontSize: 12, letterSpacing: 0.5,
               cursor: 'pointer',
             }}
           >
+            <IoWalletOutline size={16} />
             DEPOSITAR
           </button>
 
           <div style={{ position: 'relative', display: 'flex' }}>
-            <button onClick={() => { show('A carregar...'); navigate('/menu') }}
-              style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>
+            <button
+              className="hdr-btn"
+              onClick={() => { show('A carregar...'); navigate('/menu') }}
+              style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, letterSpacing: 1, border: '1px solid var(--border)' }}>
+              <IoMenu size={18} />
               MENU
             </button>
             {hasUnread && (
@@ -131,21 +127,20 @@ function DashboardInner() {
                 onClick={(e) => { e.stopPropagation(); setNotifOpen(true) }}
                 aria-label="Notificações"
                 style={{
-                  position: 'absolute', top: -9, right: -13, width: 19, height: 19, borderRadius: '50%',
+                  position: 'absolute', top: -9, right: -9, width: 20, height: 20, borderRadius: '50%',
                   background: 'var(--red-hi)', color: '#fff', border: '2px solid var(--bg-elevated)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
                   cursor: 'pointer', boxShadow: '0 2px 8px rgba(233,32,63,0.5)',
                 }}
               >
-                <IconBellSmall />
+                <IoNotifications size={11} />
               </button>
             )}
           </div>
         </div>
       </header>
 
-      {/* Modal glass de notificações — o gatilho é o sino acima,
-          por isso `hideBellTrigger` (não mostra o botão fixo próprio) */}
+      {/* Modal de notificações — o gatilho é o sino acima */}
       <NotificationCenterFloating
         hideBellTrigger
         open={notifOpen}
@@ -161,12 +156,11 @@ function DashboardInner() {
         }))}
       />
 
-      {/* Modal glass de depósito/transferência/levantamento — abre no centro do dashboard */}
+      {/* Modal de depósito/transferência/levantamento */}
       <DepositModal open={depositOpen} onClose={() => setDepositOpen(false)} />
 
-      {/* ── Desktop layout (≥1024px): chart+controls à esquerda, trades à direita ──
-          Mobile (<1024px): ordem controlada via CSS (order), ver <style> abaixo.
-          Ordem mobile: Chart → Balance → Controls (conexão Deriv) → Trades (rolável) → Footer */}
+      {/* ── Desktop (≥1024px): chart+controls à esquerda, trades à direita ──
+          Mobile (<1024px): ordem via CSS (order). Chart → Balance → Controls → Trades → Footer */}
       <main className="dash-main" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {/* Coluna esquerda */}
         <div className="dash-left-col" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 16px', gap: 12, overflowY: 'auto', minWidth: 0 }}>
@@ -183,7 +177,7 @@ function DashboardInner() {
             <Footer />
           </div>
         </div>
-        {/* Coluna direita — trades table (desktop) / vira card rolável no mobile */}
+        {/* Coluna direita — trades table (desktop) / card rolável no mobile */}
         <div className="dash-trades" style={{ width: 380, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
           <TradesTable />
         </div>
@@ -195,7 +189,6 @@ function DashboardInner() {
             flex-direction: column !important;
             gap: 6px;
             padding: 6px 8px;
-            overflow-y: auto; /* rede de segurança — só entra em ação se, mesmo compacto, algo não couber */
           }
           .dash-left-col {
             display: contents !important;
@@ -211,15 +204,8 @@ function DashboardInner() {
             border-left: none !important;
             border-top: 1px solid var(--border) !important;
             flex: 1 1 auto !important;
-            min-height: 320px !important;
             max-height: none !important;
           }
-        }
-        @media (max-width: 1023px) and (max-height: 720px) {
-          .dash-trades { min-height: 260px !important; }
-        }
-        @media (max-width: 480px) {
-          .dash-trades { min-height: 150px !important; }
         }
       `}</style>
     </div>
