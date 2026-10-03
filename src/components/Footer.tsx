@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { IoTimeOutline } from 'react-icons/io5'
 import { useTrading } from '../context/TradingContext'
+
 export function Footer() {
   const { isConnected } = useTrading()
   const [currentTime, setCurrentTime] = useState('')
@@ -22,12 +24,17 @@ export function Footer() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
         <span className={`dot ${isConnected ? 'live' : 'off'}`} />
-        <span style={{ color: 'var(--white)', fontWeight: 500, fontSize: 13 }}>Deriv</span>
+        <span style={{ color: 'var(--white)', fontWeight: 600, fontSize: 13 }}>Deriv</span>
         <span style={{ fontSize: 12, color: isConnected ? 'var(--text-dim)' : 'var(--red-hi)' }}>
           {isConnected ? 'Conectado' : 'Desconectado'}
         </span>
       </div>
-      <div className="tabular" style={{ color: 'var(--text-dim)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+      {/* Hora UTC — número em fonte mono, nunca quebra linha */}
+      <div className="tabular" style={{
+        display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+        color: 'var(--text-dim)', fontSize: 11,
+      }}>
+        <IoTimeOutline size={13} />
         {currentTime}
       </div>
     </div>
