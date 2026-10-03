@@ -7,25 +7,33 @@
 //
 // CORREÇÃO (Operar Manual): os trades manuais agora entram
 // também no array `trades` (o mesmo que a <TradesTable/> lê).
-// Antes, o fecho de um trade manual só actualizava `manualTrades`
-// e `TradingContext.trades` — nenhum dos dois é lido pela
-// <TradesTable/>, por isso os trades manuais nunca apareciam no
-// histórico visível. Também guardamos o `contractType` e `stake`
-// reais desde o pedido de compra (antes ficavam a 0/vazio até o
-// contrato fechar, porque `manual_buy_result` não devolve esses
-// campos — só o backend confirma o `contractId`).
+//
+// ALTERAÇÕES (compatibilidade com o backend v2):
+//   • Compras manuais ligadas por `clientRef`: várias compras seguidas já
+//     não trocam contractType/stake entre si (antes havia UM só "último
+//     pedido" partilhado).
+//   • Se o servidor não conseguir acompanhar o contrato (manual_trade_error)
+//     ou a ligação cair, o ecrã deixa de ficar preso em "pendente".
+//   • Moeda da conta nos valores mostrados (antes: "$" fixo).
+//   • bot:trade_opened: o tipo vem de direction | side | contractType
+//     (cada estratégia envia um campo diferente).
+//   • Avisos: mudança de mercado do bot e perda/restabelecimento da Deriv.
 // ============================================================
 
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react'
 import type {
   BotSummary, BotState, BotEvent, BotLogEntry, BotStats, BotConfig,
   BotStrategyType, TradeClosedPayload, TradeOpenedPayload, CatalogBot, WsStatus,
+  SymbolFallbackInfo,
 } from '../lib/types'
-import { useNexoraWs, ManualBuyParams, ManualBuyResult, ManualTradeClosed } from '../hooks/useNexoraWs'
+import {
+  useNexoraWs, ManualBuyParams, ManualBuyResult, ManualTradeClosed, ManualTradeError,
+} from '../hooks/useNexoraWs'
 import { useAuth } from './AuthContext'
 import { useTrading } from './TradingContext'
 import type { Trade } from './TradingContext'
 import { playGainSound } from '../lib/sound'
+import { formatMoney } from '../lib/money'
 
 export interface TradeRecord {
   id: string
@@ -44,7 +52,7 @@ export interface TradeRecord {
   exitDigit?: number
 }
 
-// ── NOVO: registo de trade manual (mesma forma do TradeRecord,
+// ── Registo de trade manual (mesma forma do TradeRecord,
 // mas sem botId real — usamos 'manual' como marcador) ─────────
 export interface ManualTradeRecord {
   id: string
@@ -82,7 +90,6 @@ interface BotsCtx {
   adminAddCatalogBot: (dto: { name: string; description: string; strategy: BotStrategyType; defaultConfig: BotConfig; tags?: string[]; isActive?: boolean }) => void
   adminRemoveCatalogBot: (id: string) => void
   adminUpdateCatalogBot: (id: string, updates: Record<string, unknown>) => void
-  // ── NOVO ──────────────────────────────────────────────────
   manualBuy: (params: ManualBuyParams) => void
   manualPendingTrade: ManualTradeRecord | null
   manualTrades: ManualTradeRecord[]
@@ -124,16 +131,19 @@ export function BotsProvider({ children }: { children: ReactNode }) {
   const [lastError, setLastError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<{ text: string; kind: 'success' | 'warning' | 'error' } | null>(null)
 
-  // ── NOVO: estado de trading manual ─────────────────────────
+  // ── Estado de trading manual ───────────────────────────────
   const [manualPendingTrade, setManualPendingTrade] = useState<ManualTradeRecord | null>(null)
   const [manualTrades, setManualTrades] = useState<ManualTradeRecord[]>([])
   const [manualBuyError, setManualBuyError] = useState<string | null>(null)
 
-  // Guarda os parâmetros do último manual_buy enviado — o backend
-  // só devolve `contractId`/`payout` em `manual_buy_result` (ver
-  // useNexoraWs.ts), não o contractType/stake originais. Precisamos
-  // deles para mostrar a linha certa na TradesTable (tipo, stake).
-  const pendingManualParamsRef = useRef<ManualBuyParams | null>(null)
+  // O backend só devolve `contractId`/`payout` (e o clientRef que enviámos),
+  // não o contractType/stake originais. Guardamos os parâmetros de cada compra:
+  //   clientRef → params   (até chegar a confirmação)
+  //   contractId → params  (até o contrato fechar)
+  const manualByRefRef = useRef<Map<string, ManualBuyParams>>(new Map())
+  const manualByContractRef = useRef<Map<string, ManualBuyParams>>(new Map())
+  const lastManualParamsRef = useRef<ManualBuyParams | null>(null) // fallback p/ servidor antigo (sem clientRef)
+  const manualSeqRef = useRef(0)
 
   const sessionBotsRef = useRef<BotSummary[]>([])
   const getBotMeta = (botId: string) => {
@@ -155,6 +165,10 @@ export function BotsProvider({ children }: { children: ReactNode }) {
   const showStatusMessage = useCallback((text: string, kind: 'success' | 'warning' | 'error') => {
     setStatusMessage({ text, kind }); setTimeout(() => setStatusMessage(null), 8000)
   }, [])
+  const showManualError = useCallback((msg: string, ms = 6000) => {
+    setManualBuyError(msg)
+    setTimeout(() => setManualBuyError(null), ms)
+  }, [])
 
   const handleCatalogLoaded = useCallback((bots: CatalogBot[]) => { setCatalogBots(bots); setIsLoadingCatalog(false) }, [])
   const handleSessionBotsLoaded = useCallback((bots: BotSummary[]) => { sessionBotsRef.current = bots; setSessionBots(bots) }, [])
@@ -171,19 +185,29 @@ export function BotsProvider({ children }: { children: ReactNode }) {
     trading._setBalance(balance, currency)
   }, [trading._setBalance])
 
-  const handleTick = useCallback((quote: number) => {
-    trading._setTick(quote)
+  const handleTick = useCallback((quote: number, pipSize?: number, symbol?: string) => {
+    trading._setTick(quote, pipSize, symbol)
   }, [trading._setTick])
 
-  // ── NOVO: handlers de compra manual ────────────────────────
+  // ── Handlers de compra manual ──────────────────────────────
+  const takeParamsByRef = (clientRef?: string): ManualBuyParams | null => {
+    if (clientRef) {
+      const p = manualByRefRef.current.get(clientRef) ?? null
+      manualByRefRef.current.delete(clientRef)
+      if (p) return p
+    }
+    return lastManualParamsRef.current
+  }
+
   const handleManualBuyResult = useCallback((result: ManualBuyResult) => {
+    const params = takeParamsByRef(result.clientRef)
+
     if (!result.success) {
-      setManualBuyError(result.error ?? 'Não foi possível abrir o contrato.')
-      setTimeout(() => setManualBuyError(null), 6000)
-      pendingManualParamsRef.current = null
+      showManualError(result.error ?? 'Não foi possível abrir o contrato.')
       return
     }
-    const params = pendingManualParamsRef.current
+    if (result.contractId && params) manualByContractRef.current.set(result.contractId, params)
+
     setManualPendingTrade({
       id: result.contractId ?? `manual_${Date.now()}`,
       hora: new Date().toLocaleTimeString('pt-PT'),
@@ -212,10 +236,15 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       contractType: params?.contractType ?? '',
     }
     setTrades(prev => [openRec, ...prev].slice(0, MAX_TRADES))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showManualError])
 
   const handleManualTradeClosed = useCallback((closed: ManualTradeClosed) => {
-    const params = pendingManualParamsRef.current
+    const params = manualByContractRef.current.get(closed.contractId)
+      ?? (closed.clientRef ? manualByRefRef.current.get(closed.clientRef) : undefined)
+      ?? lastManualParamsRef.current
+    manualByContractRef.current.delete(closed.contractId)
+
     const contractType = params?.contractType ?? ''
     const hora = new Date().toLocaleTimeString('pt-PT')
 
@@ -230,13 +259,12 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       contractType,
       exitDigit: closed.exitDigit,
     }
-    setManualPendingTrade(null)
+    // só limpa o "pendente" se for ESTE contrato (pode haver outro já em curso)
+    setManualPendingTrade(prev => (prev && prev.id === closed.contractId ? null : prev))
     setManualTrades(prev => [rec, ...prev].slice(0, MAX_MANUAL_TRADES))
 
-    // ── CORREÇÃO: actualiza a linha "pending" já criada em
-    // handleManualBuyResult (mesmo id) para o resultado final —
-    // é isto que faz o trade manual aparecer correctamente
-    // fechado na <TradesTable/>, que lê `trades` (não `manualTrades`).
+    // Atualiza a linha "pending" criada em handleManualBuyResult (mesmo id)
+    // para o resultado final — a <TradesTable/> lê `trades`, não `manualTrades`.
     setTrades(prev => {
       const idx = prev.findIndex(t => t.id === closed.contractId && t.botId === 'manual')
       const closedRec: TradeRecord = {
@@ -260,14 +288,32 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       return next
     })
 
-    // Mantém também o strip legado do TradingContext (usado por
-    // outras partes da app que já dependiam dele).
-    const t: Trade = { id: rec.id, hora: rec.hora, tipo: contractType || 'Manual', tickFinal: rec.exitDigit ?? 0, preco: `$${rec.stake.toFixed(2)}`, resultado: rec.profit }
+    // Mantém também o strip legado do TradingContext
+    const t: Trade = { id: rec.id, hora: rec.hora, tipo: contractType || 'Manual', tickFinal: rec.exitDigit ?? 0, preco: formatMoney(rec.stake, trading.currency), resultado: rec.profit }
     trading._addTrade(t)
     if (closed.won) playGainSound()
-
-    pendingManualParamsRef.current = null
   }, [trading])
+
+  // O servidor não conseguiu acompanhar o contrato: desbloqueia o ecrã
+  // (a linha em "pendente" na tabela fica, porque o contrato pode ainda
+  // estar aberto na Deriv — o utilizador confirma lá).
+  const handleManualTradeError = useCallback((err: ManualTradeError) => {
+    if (err.contractId) manualByContractRef.current.delete(err.contractId)
+    setManualPendingTrade(prev => (prev && (!err.contractId || prev.id === err.contractId) ? null : prev))
+    showManualError(err.message, 9000)
+  }, [showManualError])
+
+  const handleSymbolFallback = useCallback((info: SymbolFallbackInfo) => {
+    showStatusMessage(
+      `Mercado ${info.from} indisponível${info.reason ? ` (${info.reason})` : ''} — o bot vai operar em ${info.to}.`,
+      'warning',
+    )
+  }, [showStatusMessage])
+
+  const handleDerivStatus = useCallback((connected: boolean) => {
+    if (connected) showStatusMessage('Ligação à Deriv restabelecida.', 'success')
+    else showStatusMessage('Ligação à Deriv perdida. A reconectar… Os bots continuam ativos.', 'warning')
+  }, [showStatusMessage])
 
   const handleBotEvent = useCallback((ev: BotEvent) => {
     const { type, botId, payload } = ev
@@ -299,7 +345,12 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       case 'bot:trade_opened': {
         const p = payload as unknown as TradeOpenedPayload; if (!p?.contractId) break
         const { name, strategy } = getBotMeta(botId)
-        const rec: TradeRecord = { id: p.contractId, hora: new Date().toLocaleTimeString('pt-PT'), botId, botName: name, strategy, stake: p.stake, profit: 0, won: false, timestamp: Date.now(), pending: true, direction: p.direction }
+        const rec: TradeRecord = {
+          id: p.contractId, hora: new Date().toLocaleTimeString('pt-PT'), botId, botName: name, strategy,
+          stake: p.stake, profit: 0, won: false, timestamp: Date.now(), pending: true,
+          // cada estratégia envia um campo diferente
+          direction: p.direction ?? p.side ?? p.contractType,
+        }
         setOpenTrades(prev => ({ ...prev, [p.contractId]: rec }))
         trading._setBotStatus({ isRunning: true, currentStep: 'contract_open' }); break
       }
@@ -314,7 +365,7 @@ export function BotsProvider({ children }: { children: ReactNode }) {
         setOpenTrades(prev => { const n = { ...prev }; delete n[p.contractId]; return n })
         setTrades(prev => [rec, ...prev].slice(0, MAX_TRADES))
         setBotTrades(prev => ({ ...prev, [botId]: [rec, ...(prev[botId] ?? [])].slice(0, MAX_TRADES) }))
-        const t: Trade = { id: rec.id, hora: rec.hora, tipo: rec.contractType ?? strategy, tickFinal: rec.exitDigit ?? rec.exitTick ?? 0, preco: `$${rec.stake.toFixed(2)}`, resultado: rec.profit }
+        const t: Trade = { id: rec.id, hora: rec.hora, tipo: rec.contractType ?? strategy, tickFinal: rec.exitDigit ?? rec.exitTick ?? 0, preco: formatMoney(rec.stake, trading.currency), resultado: rec.profit }
         trading._addTrade(t)
 
         if (p.won) playGainSound()
@@ -329,9 +380,10 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       case 'bot:goal_reached': {
         const p = payload as { reason?: string; maxProfit?: number; maxLoss?: number; maxTrades?: number }
         const { name } = getBotMeta(botId)
+        const cur = trading.currency
         let msg = `${name}: parado automaticamente.`
-        if (p.reason === 'max_profit_reached') msg = `🎯 ${name}: Meta de lucro atingida! ($${p.maxProfit?.toFixed(2)})`
-        else if (p.reason === 'max_loss_reached') msg = `🛑 ${name}: Stop de perda atingido. ($${p.maxLoss?.toFixed(2)})`
+        if (p.reason === 'max_profit_reached') msg = `🎯 ${name}: Meta de lucro atingida!${p.maxProfit != null ? ` (${formatMoney(p.maxProfit, cur)})` : ''}`
+        else if (p.reason === 'max_loss_reached') msg = `🛑 ${name}: Stop de perda atingido.${p.maxLoss != null ? ` (${formatMoney(p.maxLoss, cur)})` : ''}`
         else if (p.reason === 'max_trades_reached') msg = `✅ ${name}: Limite de ${p.maxTrades} trades atingido.`
         showStatusMessage(msg, p.reason === 'max_profit_reached' ? 'success' : 'warning'); break
       }
@@ -354,19 +406,38 @@ export function BotsProvider({ children }: { children: ReactNode }) {
     onBotLogs: handleBotLogs, onError: showError, onAuthFailed: handleAuthFailed,
     onBalance: handleBalance, onTick: handleTick,
     onManualBuyResult: handleManualBuyResult, onManualTradeClosed: handleManualTradeClosed,
+    onManualTradeError: handleManualTradeError,
+    onSymbolFallback: handleSymbolFallback, onDerivStatus: handleDerivStatus,
     token, accountId,
   })
 
-  // ── Compra manual: envolve ws.manualBuy para guardar os
-  // parâmetros enviados (contractType, stake) antes de disparar,
-  // já que a confirmação do backend não os devolve — só o
-  // contractId. Precisa vir depois de `ws` estar definido. ─────
+  // ── Compra manual: gera um clientRef, guarda os parâmetros
+  // (contractType, stake) e envia. O servidor devolve o clientRef em
+  // todas as respostas, por isso cada compra fica ligada aos SEUS dados
+  // mesmo com várias seguidas. ─────────────────────────────────────
   const manualBuyWrapped = useCallback((params: ManualBuyParams) => {
-    pendingManualParamsRef.current = params
-    ws.manualBuy(params)
-  }, [ws.manualBuy])
+    const clientRef = `m_${Date.now().toString(36)}_${(manualSeqRef.current++).toString(36)}`
+    manualByRefRef.current.set(clientRef, params)
+    lastManualParamsRef.current = params
+    const sent = ws.manualBuy({ ...params, clientRef })
+    if (!sent) {
+      manualByRefRef.current.delete(clientRef)
+      showManualError('Sem ligação ao servidor. Tente novamente dentro de instantes.')
+    }
+  }, [ws.manualBuy, showManualError])
 
   useEffect(() => { trading._setConnected(ws.wsStatus === 'connected') }, [ws.wsStatus]) // eslint-disable-line
+
+  // Ligação ao servidor caiu: o servidor deixa de acompanhar os contratos
+  // manuais em curso (o resultado já não chega). Não deixa o ecrã preso.
+  useEffect(() => {
+    if (ws.wsStatus === 'connected') return
+    if (manualByContractRef.current.size === 0 && manualByRefRef.current.size === 0) return
+    manualByContractRef.current.clear()
+    manualByRefRef.current.clear()
+    setManualPendingTrade(null)
+    showStatusMessage('Ligação perdida durante uma compra manual. Confirme o resultado na Deriv.', 'warning')
+  }, [ws.wsStatus, showStatusMessage])
 
   const clearTrades = useCallback(() => { setTrades([]); setBotTrades({}) }, [])
 
@@ -382,7 +453,6 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       adminAddCatalogBot: ws.adminAddCatalogBot,
       adminRemoveCatalogBot: ws.adminRemoveCatalogBot,
       adminUpdateCatalogBot: ws.adminUpdateCatalogBot,
-      // ── NOVO ────────────────────────────────────────────────
       manualBuy: manualBuyWrapped,
       manualPendingTrade,
       manualTrades,
