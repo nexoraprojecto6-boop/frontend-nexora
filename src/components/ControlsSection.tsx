@@ -23,14 +23,14 @@ function Portal({ children }: { children: React.ReactNode }) {
 }
 
 // Altura/tamanhos fluidos dos botões da grelha de controlo
-const CTRL_H = 'clamp(44px, 11vw, 56px)'
+const CTRL_H = 'clamp(40px, 10.5vw, 46px)'
 const CTRL_LABEL: React.CSSProperties = {
-  color: '#e5e5ea', fontSize: 'clamp(11px, 3vw, 15px)', marginBottom: 6, fontWeight: 500,
+  color: '#e5e5ea', fontSize: 'clamp(11px, 3vw, 13px)', marginBottom: 6, fontWeight: 500,
   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
 }
 const CTRL_ICON_BOX: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  width: 'clamp(22px, 6vw, 30px)', height: 'clamp(22px, 6vw, 30px)', borderRadius: 8,
+  width: 'clamp(22px, 6vw, 30px)', height: 'clamp(22px, 6vw, 30px)', borderRadius: 4,
   background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
 }
 
@@ -69,7 +69,7 @@ function NumberField({ f, value, onChange }: { f: StrategyFieldDef; value: unkno
       }}
       onBlur={() => {}}
       className="btn-ghost tabular"
-      style={{ width: '100%', padding: '10px 12px', fontSize: 14, minHeight: 44 }}
+      style={{ width: '100%', padding: '10px 12px', fontSize: 14, minHeight: 40 }}
     />
   )
 }
@@ -78,11 +78,11 @@ function Field({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; on
   if (f.type === 'toggle') {
     return (
       <button type="button" onClick={() => onChange(!value)} aria-pressed={!!value} style={{
-        position: 'relative', width: 44, height: 24, borderRadius: 12, flexShrink: 0,
+        position: 'relative', width: 40, height: 22, borderRadius: 4, flexShrink: 0,
         background: value ? 'var(--blue)' : 'var(--border-hi)', transition: 'background .15s',
       }}>
         <span style={{
-          position: 'absolute', top: 2, left: value ? 22 : 2, width: 20, height: 20, borderRadius: '50%',
+          position: 'absolute', top: 2, left: value ? 20 : 2, width: 18, height: 18, borderRadius: 2,
           background: 'white', transition: 'left .15s', boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
         }} />
       </button>
@@ -92,7 +92,7 @@ function Field({ f, value, onChange }: { f: StrategyFieldDef; value: unknown; on
     return (
       <div style={{ position: 'relative' }}>
         <select value={value as string} onChange={e => onChange(e.target.value)} className="btn-ghost" style={{
-          width: '100%', padding: '10px 36px 10px 12px', fontSize: 14, minHeight: 44, appearance: 'none', cursor: 'pointer',
+          width: '100%', padding: '10px 36px 10px 12px', fontSize: 14, minHeight: 40, appearance: 'none', cursor: 'pointer',
         }}>
           {f.options?.map(o => <option key={o.value} value={o.value} style={{ background: 'var(--bg-card)' }}>{o.label}</option>)}
         </select>
@@ -183,7 +183,7 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
               <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>{bot.name}</p>
               <p style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>{STRATEGY_LABELS[bot.strategy]}</p>
             </div>
-            <button onClick={onClose} aria-label="Fechar" className="btn-ghost" style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <button onClick={onClose} aria-label="Fechar" className="btn-ghost" style={{ width: 36, height: 36, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <IoClose size={18} />
             </button>
           </div>
@@ -237,6 +237,12 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
     </Portal>
   )
 }
+
+// Passos da barra de progresso (estado real do bot)
+const PROGRESS_STEPS = ['Analisando', 'Contrato aberto', 'Contrato fechado']
+// Tempo mínimo a mostrar "Contrato fechado" após fechar (0 = sem confirmação).
+// Se um novo contrato abrir, o estado muda de imediato para "aberto".
+const CLOSED_CONFIRM_MS = 700
 
 export function ControlsSection() {
   const navigate = useNavigate()
@@ -304,34 +310,49 @@ export function ControlsSection() {
   const openCountForBot = sessionBotId ? Object.values(openTrades).filter(t => t.botId === sessionBotId).length : 0
   const closedCountForBot = sessionBotId ? trades.filter(t => t.botId === sessionBotId).length : 0
 
-  const [flashClosed, setFlashClosed] = useState(false)
-  const prevClosedCountRef = useRef<number>(0)
+  // ── Barra de progresso: reflete SEMPRE o estado real do bot ──────────
+  //   Analisando      → bot a correr, sem contrato aberto
+  //   Contrato aberto → existe pelo menos 1 contrato aberto (prioridade máxima)
+  //   Contrato fechado→ um contrato acabou de fechar; confirmação curta.
+  //                     Se abrir outro, passa logo a "aberto" (nunca prende).
+  // Nenhuma animação própria decide o estado — só os dados reais.
+  const [showClosed, setShowClosed] = useState(false)
+  const prevOpenRef = useRef(0)
+  const prevClosedRef = useRef<{ id: string | null; n: number }>({ id: null, n: 0 })
+  const closedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    const prev = prevClosedCountRef.current
-    prevClosedCountRef.current = closedCountForBot
-    if (closedCountForBot > prev && prev !== 0) {
-      setFlashClosed(true)
-      const t = setTimeout(() => setFlashClosed(false), 1200)
-      return () => clearTimeout(t)
+    const prev = prevClosedRef.current
+    const sameBot = prev.id === sessionBotId
+    const closedIncreased = sameBot && closedCountForBot > prev.n
+    const openFinished = sameBot && prevOpenRef.current > 0 && openCountForBot === 0
+
+    prevClosedRef.current = { id: sessionBotId, n: closedCountForBot }
+    prevOpenRef.current = openCountForBot
+
+    if (!sameBot) {
+      // Mudou de bot (ou parou): limpa qualquer "fechado" pendente
+      if (closedTimerRef.current) clearTimeout(closedTimerRef.current)
+      setShowClosed(false)
+      return
     }
-  }, [closedCountForBot])
+    if (closedIncreased || openFinished) {
+      setShowClosed(true)
+      if (closedTimerRef.current) clearTimeout(closedTimerRef.current)
+      closedTimerRef.current = setTimeout(() => setShowClosed(false), CLOSED_CONFIRM_MS)
+    }
+  }, [openCountForBot, closedCountForBot, sessionBotId])
 
-  const progressStep = !isRunning ? -1 : flashClosed ? 2 : openCountForBot > 0 ? 1 : 0
-  const steps = ['Analisando', 'Contrato aberto', 'Contrato fechado']
-  const [animProgress, setAnimProgress] = useState(0)
+  useEffect(() => () => { if (closedTimerRef.current) clearTimeout(closedTimerRef.current) }, [])
 
-  useEffect(() => {
-    const target = isRunning && progressStep >= 0 ? (progressStep / (steps.length - 1)) * 100 : 0
-
-    const id = setInterval(() => setAnimProgress(p => {
-      const d = target - p
-      if (Math.abs(d) < 0.3) return target
-      const step = d * 0.45
-      return Math.abs(step) < 1.5 ? p + Math.sign(d) * 1.5 : p + step
-    }), 16)
-    return () => clearInterval(id)
-  }, [isRunning, progressStep])
+  // -1 = parado/pausado sem contratos | 0 = analisando | 1 = aberto | 2 = fechado
+  const progressStep = !liveBot ? -1
+    : openCountForBot > 0 ? 1
+    : showClosed ? 2
+    : isRunning ? 0
+    : -1
+  const steps = PROGRESS_STEPS
+  const fillPct = progressStep === 1 ? 50 : progressStep === 2 ? 100 : 0
 
   const { netPnL, totalWins, totalLosses } = useMemo(() => {
     const active = sessionBots.filter(b => b.stats.totalTrades > 0 || b.status === 'running')
@@ -399,14 +420,14 @@ export function ControlsSection() {
   const accColor = !currentAccount ? 'var(--text-faint)' : currentAccount.is_virtual ? demoColorDisplay : realColorDisplay
 
   const toggleDisabled = !selectedBot || wsStatus !== 'connected' || isStarting
-  const toggleColor = toggleDisabled ? 'var(--border)' : isRunning ? 'var(--red-hi)' : isPaused ? '#f5a623' : 'var(--green)'
+  const toggleColor = toggleDisabled ? 'var(--border)' : isRunning ? 'var(--red-hi)' : isPaused ? 'var(--amber)' : 'var(--green)'
 
   const ctrlBtn: React.CSSProperties = {
     width: '100%', height: CTRL_H, padding: '0 clamp(6px, 2vw, 12px)',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0,
   }
   const ctrlText: React.CSSProperties = {
-    fontSize: 'clamp(13px, 3.8vw, 18px)', fontWeight: 700,
+    fontSize: 'clamp(12px, 3.4vw, 15px)', fontWeight: 700,
     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0,
   }
 
@@ -437,8 +458,8 @@ export function ControlsSection() {
           <div style={{ minWidth: 0 }}>
             <p style={CTRL_LABEL}>Vídeo Aula</p>
             <button onClick={goToAprenderAOperar} aria-label="Vídeo Aula" style={{
-              width: '100%', height: CTRL_H, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(5px, 2vw, 10px)',
-              background: 'linear-gradient(180deg, #ef4a5c, #dc2f43)', color: '#fff',
+              width: '100%', height: CTRL_H, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(5px, 2vw, 10px)',
+              background: 'var(--red-hi)', color: '#fff',
             }}>
               <IoPlay size={18} />
               <IoInformationCircleOutline size={20} />
@@ -449,7 +470,7 @@ export function ControlsSection() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(8px, 3vw, 16px)' }}>
           <button onClick={() => selectedBot && setShowConfig(true)} disabled={!selectedBot} title="Configurar parâmetros" aria-label="Configurar parâmetros"
             className="btn-ghost" style={{
-              width: 'clamp(40px, 10vw, 48px)', height: 'clamp(40px, 10vw, 48px)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0,
+              width: 'clamp(38px, 9.5vw, 44px)', height: 'clamp(38px, 9.5vw, 44px)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0,
               opacity: !selectedBot ? 0.4 : 1, cursor: !selectedBot ? 'not-allowed' : 'pointer',
               borderColor: pendingConfig ? 'var(--blue)' : undefined,
               color: pendingConfig ? 'var(--blue-hi)' : undefined,
@@ -461,7 +482,7 @@ export function ControlsSection() {
             title={isStarting ? 'A iniciar…' : undefined}
             aria-label={isRunning ? 'Parar' : 'Iniciar'}
             style={{
-              width: 'clamp(46px, 12vw, 56px)', height: 'clamp(46px, 12vw, 56px)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              width: 'clamp(40px, 10.5vw, 46px)', height: 'clamp(40px, 10.5vw, 46px)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               border: `2.5px solid ${toggleColor}`,
               background: 'transparent',
               color: toggleColor,
@@ -477,29 +498,48 @@ export function ControlsSection() {
             )}
           </button>
 
-          {/* Progresso — rótulos alinhados com as bolinhas (esq / centro / dir) */}
+          {/* Progresso — estado real; rótulos alinhados com as bolinhas */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 10, gap: 4 }}>
               {steps.map((s, i) => (
                 <span key={s} style={{
-                  fontSize: 'clamp(9px, 2.6vw, 13px)', fontWeight: 500,
+                  fontSize: 'clamp(9px, 2.6vw, 13px)',
+                  fontWeight: i === progressStep ? 700 : 500,
                   textAlign: i === 0 ? 'left' : i === steps.length - 1 ? 'right' : 'center',
-                  color: i <= progressStep ? 'var(--white)' : 'var(--text-faint)',
+                  color: i === progressStep ? 'var(--white)' : i < progressStep ? 'var(--text-dim)' : 'var(--text-faint)',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  transition: 'color .2s',
                 }}>{s}</span>
               ))}
             </div>
-            <div style={{ position: 'relative', height: 4, background: 'var(--border)', borderRadius: 4, margin: '0 7px' }}>
-              <div style={{ position: 'absolute', height: '100%', background: 'var(--blue)', borderRadius: 4, width: `${animProgress}%`, transition: 'width 0.5s' }} />
-              {steps.map((_, i) => (
-                <div key={i} style={{
-                  position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%',
-                  border: `2px solid ${i <= progressStep ? 'var(--blue)' : 'var(--border-hi)'}`,
-                  background: i <= progressStep ? 'white' : 'var(--bg-card-hi)',
-                  left: `calc(${(i / (steps.length - 1)) * 100}% - 7px)`,
-                }} />
-              ))}
+            <div style={{ position: 'relative', height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 7px' }}>
+              <div style={{
+                position: 'absolute', left: 0, top: 0, height: '100%', borderRadius: 2,
+                background: progressStep === 2 ? 'var(--green)' : 'var(--blue)',
+                width: `${fillPct}%`,
+                transition: 'width .3s ease, background .2s',
+              }} />
+              {steps.map((_, i) => {
+                const reached = i <= progressStep
+                const active = i === progressStep
+                return (
+                  <div key={i} className={active ? 'nx-step-active' : undefined} style={{
+                    position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%',
+                    border: `2px solid ${reached ? (progressStep === 2 && i === 2 ? 'var(--green)' : 'var(--blue)') : 'var(--border-hi)'}`,
+                    background: reached ? 'white' : 'var(--bg-card-hi)',
+                    left: `calc(${(i / (steps.length - 1)) * 100}% - 7px)`,
+                    transition: 'background .2s, border-color .2s',
+                  }} />
+                )
+              })}
             </div>
+            <style>{`
+              @keyframes nxStepPulse {
+                0%   { box-shadow: 0 0 0 0 rgba(79,139,255,0.55); }
+                100% { box-shadow: 0 0 0 7px rgba(79,139,255,0); }
+              }
+              .nx-step-active { animation: nxStepPulse 1.2s ease-out infinite; }
+            `}</style>
           </div>
         </div>
       </div>
