@@ -1,20 +1,16 @@
 // ============================================================
-// NEXORA FOREX — ChartSection  v6
-// Design: igual à imagem de referência
-//   - Barras neutras: cinza azulado (paleta Bertoni)
-//   - Barra hot (máx): verde sólido (#2e7d32)
-//   - Barras cold (mín): vermelho sólido (#c62828)
-//   - Sem gradientes, sem glow, sem neon — flat e limpo
-//   - Header: ícone | Last Digits: X | N ticks | selector
-//   - ALTERAÇÃO (Operar Manual): o par de ícones barras/linha do
-//     canto superior esquerdo foi substituído por UM botão que
-//     abre a página /operar-manual (layout Over/Under completo,
-//     com gráfico + grelha de dígitos + compra).
-// Lógica de dados: idêntica (WS pública + ticks_history)
+// NEXORA FOREX — ChartSection  v7
+// Design igual à imagem de referência:
+//   - Barras neutras cinza azulado, hot (máx) verde, cold (mín) vermelho
+//   - Header: botão Operar Manual | Last Digits: X | N ticks | selector
+// Lógica de dados: idêntica (WS pública + ticks_history).
+// Alterações v7: apenas visual — ícones da biblioteca, números em fonte
+// mono, medidas fluidas para não cortar em ecrãs estreitos.
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { IoChevronDown, IoChevronUp, IoTrendingUp } from 'react-icons/io5'
 
 // ── Config ───────────────────────────────────────────────────
 const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
@@ -27,15 +23,6 @@ const COLOR_HOT     = '#2e7d32'
 const COLOR_COLD    = '#c62828'
 const COLOR_NEUTRAL = '#b8bcc8'
 
-const SYMBOLS = [
-  { value: '1HZ100V', label: 'Vol 100 (1s)' },
-  { value: '1HZ10V',  label: 'Vol 10 (1s)'  },
-  { value: 'R_100',   label: 'Vol 100'       },
-  { value: 'R_75',    label: 'Vol 75'        },
-  { value: 'R_50',    label: 'Vol 50'        },
-  { value: 'R_25',    label: 'Vol 25'        },
-  { value: 'R_10',    label: 'Vol 10'        },
-]
 const WINDOWS = [25, 50, 100, 250, 500, 1000]
 
 // ── Utilitários ───────────────────────────────────────────────
@@ -71,23 +58,10 @@ function calcAll(hist: number[], win: number) {
   }
 }
 
-// ── Ícone inline ─────────────────────────────────────────────
-const IconChevron = ({ up }: { up?: boolean }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d={up ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}/>
-  </svg>
-)
-const IconTrade = () => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 17l6-6 4 4 8-8"/>
-    <path d="M17 7h4v4"/>
-  </svg>
-)
-
 // ── Componente principal ──────────────────────────────────────
 export function ChartSection() {
   const navigate = useNavigate()
-  const [symbol,    setSymbol]    = useState('1HZ100V')
+  const [symbol]  = useState('1HZ100V')
   const [win,       setWin]       = useState(25)
   const [phase,     setPhase]     = useState<'connecting'|'loading'|'live'|'error'>('connecting')
   const [tkCnt,     setTkCnt]     = useState(0)
@@ -235,6 +209,7 @@ export function ChartSection() {
 
   const lastD    = hist.current.length > 0 ? hist.current[hist.current.length - 1] : null
   const maxBar   = Math.max(...bars, 10)
+  void tkCnt
 
   return (
     <div className="card" style={{ overflow: 'visible' }}>
@@ -243,7 +218,6 @@ export function ChartSection() {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1.5vw, 10px)',
         padding: 'clamp(8px, 2vw, 10px) clamp(8px, 3vw, 14px)', borderBottom: '1px solid var(--border)',
-        overflow: 'hidden',
       }}>
         {/* Botão único — abre a página de Operar Manual */}
         <button
@@ -251,21 +225,21 @@ export function ChartSection() {
           aria-label="Operar Manual"
           title="Operar Manual"
           style={{
-            width: 'clamp(26px, 7vw, 34px)', height: 'clamp(26px, 7vw, 34px)', borderRadius: 8,
+            width: 'clamp(30px, 8vw, 36px)', height: 'clamp(30px, 8vw, 36px)', borderRadius: 10,
             background: '#3ddc84',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#0b0e14',
             border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0,
           }}
         >
-          <IconTrade />
+          <IoTrendingUp size={19} />
         </button>
 
         {/* Label central */}
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0, overflow: 'hidden' }}>
           <span style={{ fontSize: 'clamp(12px, 3.6vw, 17px)', fontWeight: 500, whiteSpace: 'nowrap' }}>
             <span style={{ color: 'var(--white)' }}>Last Digits: </span>
-            <span style={{ color: lastD !== null ? COLOR_HOT : 'var(--text-dim)' }}>
+            <span className="tabular" style={{ color: lastD !== null ? COLOR_HOT : 'var(--text-dim)', fontWeight: 700 }}>
               {lastD !== null ? lastD : '—'}
             </span>
           </span>
@@ -273,24 +247,25 @@ export function ChartSection() {
 
         {/* Contagem + selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 'clamp(11px, 3.2vw, 16px)', fontWeight: 400, whiteSpace: 'nowrap' }}>
-            {phase === 'loading' ? '...' : `${Math.min(info.total, win)} ticks`}
+          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 'clamp(11px, 3.2vw, 15px)', whiteSpace: 'nowrap' }}>
+            {phase === 'loading' ? '...' : <><span className="tabular">{Math.min(info.total, win)}</span> ticks</>}
           </span>
           <div style={{ position: 'relative', flexShrink: 0 }}>
-            <button onClick={() => setWinOpen(o => !o)} style={{
+            <button onClick={() => setWinOpen(o => !o)} aria-label="Número de ticks" style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 24, height: 24,
+              width: 32, height: 32,
               background: 'transparent', border: 'none',
               cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
             }}>
-              <IconChevron up={winOpen} />
+              {winOpen ? <IoChevronUp size={16} /> : <IoChevronDown size={16} />}
             </button>
             {winOpen && (
               <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 70, padding: 4, minWidth: 100 }}>
                 {WINDOWS.map(w => (
                   <button key={w} onClick={() => { setWin(w); setWinOpen(false) }}
+                    className="tabular"
                     style={{
-                      width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8,
+                      width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8,
                       fontSize: 13, background: 'transparent',
                       color: win === w ? 'var(--blue-hi)' : 'var(--text)',
                       fontWeight: win === w ? 700 : 400,
@@ -318,7 +293,7 @@ export function ChartSection() {
               alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%',
             }}>
               <span className="tabular" style={{
-                fontSize: 'clamp(8.5px, 2.6vw, 12px)', fontWeight: 500,
+                fontSize: 'clamp(8px, 2.4vw, 11.5px)', fontWeight: 500, letterSpacing: '-0.05em',
                 color: 'rgba(255,255,255,0.92)', lineHeight: 1, minHeight: 14, whiteSpace: 'nowrap',
               }}>
                 {pct.toFixed(1)}%
@@ -328,12 +303,12 @@ export function ChartSection() {
                 width: '100%',
                 height: `max(4px, calc(var(--chart-bar-max) * ${ratio.toFixed(4)}))`,
                 background: color,
-                borderRadius: 0,
+                borderRadius: '3px 3px 0 0',
                 flexShrink: 0,
               }} />
 
               <span className="tabular" style={{
-                fontSize: 'clamp(10px, 3vw, 15px)', fontWeight: 700,
+                fontSize: 'clamp(11px, 3vw, 15px)', fontWeight: 700,
                 color: 'var(--white)', lineHeight: 1,
               }}>
                 {digit}
