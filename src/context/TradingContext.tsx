@@ -6,9 +6,19 @@
 // vêm do backend via BotsProvider/useNexoraWs. Isto evita o bug
 // de ligações concorrentes à Deriv (limite de 5/conta) e dados
 // de tick dessincronizados entre componentes.
+//
+// ALTERAÇÕES (compatibilidade com o backend):
+//   • O último dígito usa o pip_size REAL do tick (antes: sempre 2
+//     casas → dígito errado em R_10/R_25/R_50/R_75, que têm 3–4).
+//   • Os ticks podem vir de vários mercados (bots diferentes, ou o
+//     bot mudou de mercado). O gráfico segue UM mercado: o primeiro
+//     que chega; só muda quando esse fica mudo (ex: mudança automática
+//     de mercado), e nesse caso o histórico de dígitos recomeça.
+//   • Vitória = lucro > 0 (antes: lucro 0 contava como vitória).
 // ============================================================
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
+import { decimalsFromPip } from '../lib/money'
 
 export interface BarEntry {
   digit: number
@@ -58,7 +68,7 @@ interface TradingContextValue {
   botStatus: BotStatusUi
 
   _setBalance: (b: number, c: string) => void
-  _setTick: (quote: number) => void
+  _setTick: (quote: number, pipSize?: number, symbol?: string) => void
   _setBotStatus: (s: BotStatusUi) => void
   _addTrade: (t: Trade) => void
   _setConnected: (v: boolean) => void
@@ -72,6 +82,8 @@ const MAX_LAST_STRIP = 24
 // loader do dashboard deixa de ficar preso para sempre (o status
 // "offline" do indicador WS continua a refletir a realidade).
 const LOADING_SAFETY_TIMEOUT_MS = 8000
+// Um mercado só é trocado por outro se ficou sem ticks este tempo.
+const SYMBOL_SWITCH_SILENCE_MS = 10_000
 
 function computeBarData(digits: number[], windowSize: number): BarEntry[] {
   const slice = digits.slice(-windowSize)
@@ -102,6 +114,8 @@ export function TradingProvider({ children }: { children: ReactNode }) {
 
   const digitHistory = useRef<number[]>([])
   const selectedTicksRef = useRef(selectedTicks)
+  const symbolRef = useRef<string | null>(null)
+  const lastTickAtRef = useRef(0)
   useEffect(() => { selectedTicksRef.current = selectedTicks }, [selectedTicks])
 
   useEffect(() => {
@@ -114,9 +128,27 @@ export function TradingProvider({ children }: { children: ReactNode }) {
     setCurrency(c)
   }, [])
 
-  const _setTick = useCallback((quote: number) => {
-    const priceStr = quote.toFixed(2)
+  const _setTick = useCallback((quote: number, pipSize?: number, symbol?: string) => {
+    const now = Date.now()
+
+    // Segue um só mercado (ver comentário no topo do ficheiro)
+    if (symbol) {
+      if (symbolRef.current === null) {
+        symbolRef.current = symbol
+      } else if (symbol !== symbolRef.current) {
+        if (now - lastTickAtRef.current < SYMBOL_SWITCH_SILENCE_MS) return
+        symbolRef.current = symbol
+        digitHistory.current = []
+        setLastDigits([])
+      }
+    }
+    lastTickAtRef.current = now
+
+    // pip_size real do símbolo (2, 3 ou 4 casas) — mantém zeros finais
+    const priceStr = quote.toFixed(decimalsFromPip(pipSize, 2))
     const digit = parseInt(priceStr[priceStr.length - 1], 10)
+    if (Number.isNaN(digit)) return
+
     digitHistory.current.push(digit)
     if (digitHistory.current.length > MAX_DIGIT_HISTORY) {
       digitHistory.current = digitHistory.current.slice(-MAX_DIGIT_HISTORY)
@@ -138,7 +170,7 @@ export function TradingProvider({ children }: { children: ReactNode }) {
 
   const _addTrade = useCallback((t: Trade) => {
     setTrades(prev => [t, ...prev].slice(0, 500))
-    if (t.resultado >= 0) {
+    if (t.resultado > 0) {
       setWins(w => w + 1)
       setProfit(p => p + t.resultado)
     } else {
