@@ -157,7 +157,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
-    await api.logout()
+    // Se o servidor estiver em baixo, o logout NÃO pode falhar: antes, uma
+    // exceção em api.logout() deixava o utilizador preso (sessão nunca limpa).
+    try {
+      await api.logout()
+    } catch (e) {
+      console.warn('[Auth] logout REST failed (a limpar sessão local na mesma):', e)
+    }
+    // O token Deriv e a conta ativa têm de sair do localStorage, senão a app
+    // volta a entrar sozinha ao recarregar.
+    localStorage.removeItem('token')
+    localStorage.removeItem('currentAccountId')
     setIsAuthenticated(false)
     setAccounts([])
     setCurrentAccountState(null)
