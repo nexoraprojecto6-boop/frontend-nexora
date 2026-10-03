@@ -203,7 +203,8 @@ function DashboardInner() {
             width: 100% !important;
             border-left: none !important;
             border-top: 1px solid var(--border) !important;
-            flex: 1 1 auto !important;
+            flex: 0 0 auto !important;
+            height: clamp(300px, 50dvh, 520px) !important;
             max-height: none !important;
           }
         }
