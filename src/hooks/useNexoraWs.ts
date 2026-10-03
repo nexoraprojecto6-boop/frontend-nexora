@@ -5,12 +5,28 @@
 // escuta dos eventos `manual_buy_result` (confirmação de compra)
 // e `manual_trade_closed` (resultado final do contrato manual).
 // Segue exatamente o mesmo padrão dos eventos `bot:*` já existentes.
+//
+// ALTERAÇÕES (compatibilidade com o backend v2):
+//   • AUTH_TEMPORARY (Deriv/rede em baixo) já NÃO termina a sessão —
+//     só AUTH_FAILED (token inválido) o faz. Antes, qualquer falha
+//     temporária de login na Deriv expulsava o utilizador.
+//   • O contador de reconexão só volta a zero quando a ligação fica
+//     estável (ou autentica). Antes zerava a cada abertura: se o servidor
+//     fechava logo a seguir, reconectava de 1 em 1 segundo para sempre.
+//   • Sockets antigos já não interferem com o novo (guarda "stale"):
+//     o onclose de um socket substituído agendava reconexões duplicadas.
+//   • connect() não abre um 2.º socket enquanto o 1.º ainda está a ligar.
+//   • Mensagens novas: bot_symbol_fallback, manual_trade_error,
+//     deriv_disconnected/deriv_reconnected.
+//   • tick traz pip_size e symbol (dígito final correto por mercado).
+//   • Ações do utilizador sem ligação avisam em vez de falhar em silêncio.
+//   • clientRef nas compras manuais (liga cada resposta ao pedido certo).
 // ============================================================
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 import type {
   BotEvent, BotEventType, BotState, BotSummary, BotLogEntry,
-  BotConfig, BotStrategyType, CatalogBot, WsStatus,
+  BotConfig, BotStrategyType, CatalogBot, WsStatus, SymbolFallbackInfo,
 } from '../lib/types'
 import { WS_URL } from '../lib/env'
 
@@ -21,9 +37,12 @@ export interface ManualBuyParams {
   durationUnit: 'ticks' | 's' | 'm'
   stake: number
   barrier?: number | string
+  /** Preenchido pelo BotsContext; o servidor devolve-o em todas as respostas. */
+  clientRef?: string
 }
 
 export interface ManualBuyResult {
+  clientRef?: string
   success: boolean
   contractId?: string
   payout?: number
@@ -31,12 +50,20 @@ export interface ManualBuyResult {
 }
 
 export interface ManualTradeClosed {
+  clientRef?: string
   contractId: string
   profit: number
   won: boolean
   stake: number
   exitTick?: number
   exitDigit?: number
+}
+
+/** O servidor não conseguiu acompanhar o contrato até ao fim (pode continuar aberto na Deriv). */
+export interface ManualTradeError {
+  clientRef?: string
+  contractId?: string
+  message: string
 }
 
 interface NexoraWsCallbacks {
@@ -48,9 +75,12 @@ interface NexoraWsCallbacks {
   onError?: (msg: string) => void
   onAuthFailed?: () => void
   onBalance?: (balance: number, currency: string) => void
-  onTick?: (quote: number) => void
+  onTick?: (quote: number, pipSize?: number, symbol?: string) => void
   onManualBuyResult?: (result: ManualBuyResult) => void
   onManualTradeClosed?: (trade: ManualTradeClosed) => void
+  onManualTradeError?: (err: ManualTradeError) => void
+  onSymbolFallback?: (info: SymbolFallbackInfo) => void
+  onDerivStatus?: (connected: boolean) => void
   token?: string | null
   accountId?: string | null
 }
@@ -59,12 +89,20 @@ const PING_INTERVAL_MS = 15_000
 const WATCHDOG_INTERVAL_MS = 10_000
 const WATCHDOG_TIMEOUT_MS = 40_000
 const MAX_RECONNECT_DELAY_MS = 30_000
+const STABLE_CONNECTION_MS = 10_000
+
+// Falhas de login em que a sessão deve terminar (token inválido, sem contas).
+// AUTH_TEMPORARY NÃO está aqui de propósito: é falha temporária, reconecta com backoff.
+const FATAL_AUTH_CODES = new Set(['AUTH_FAILED', 'MISSING_TOKEN', 'NO_ACCOUNTS', 'OTP_FAILED'])
+// Códigos que não devem mostrar mensagem de erro ao utilizador
+const SILENT_CODES = new Set(['AUTH_IN_PROGRESS'])
 
 export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
   const wsRef = useRef<WebSocket | null>(null)
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const reconnRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const attemptRef = useRef(0)
+  const openedAtRef = useRef(0)
   const mountedRef = useRef(true)
   const cbRef = useRef(callbacks)
   cbRef.current = callbacks
@@ -80,11 +118,28 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
 
   const [wsStatus, setWsStatus] = useState<WsStatus>('disconnected')
 
-  const send = useCallback((type: string, payload: Record<string, unknown> = {}) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, payload }))
+  // Envio silencioso (consultas, ping, listas). Devolve se foi enviado.
+  const send = useCallback((type: string, payload: Record<string, unknown> = {}): boolean => {
+    const ws = wsRef.current
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type, payload }))
+      return true
     }
+    return false
   }, [])
+
+  // Ações do utilizador (iniciar/parar bot, admin...): sem ligação, avisa
+  // em vez de falhar em silêncio.
+  const sendAction = useCallback((type: string, payload: Record<string, unknown> = {}): boolean => {
+    const ok = send(type, payload)
+    if (!ok) cbRef.current.onError?.('Sem ligação ao servidor. A reconectar…')
+    return ok
+  }, [send])
+
+  const clearTimers = () => {
+    if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null }
+    if (watchdogRef.current) { clearInterval(watchdogRef.current); watchdogRef.current = null }
+  }
 
   const handleMessage = useCallback((raw: string) => {
     let msg: Record<string, unknown> = {}
@@ -138,31 +193,55 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
           const quote = typeof msg.quote === 'number' ? msg.quote
             : typeof payload.quote === 'number' ? payload.quote
             : null
-          if (quote != null) cbRef.current.onTick?.(quote)
+          const pip = typeof msg.pip_size === 'number' ? msg.pip_size
+            : typeof payload.pip_size === 'number' ? payload.pip_size
+            : undefined
+          const symbol = typeof msg.symbol === 'string' ? msg.symbol
+            : typeof payload.symbol === 'string' ? payload.symbol
+            : undefined
+          if (quote != null) cbRef.current.onTick?.(quote, pip, symbol)
           break
         }
 
         // ── Compra manual: confirmação imediata ────────────────
-        // Backend deve emitir: { type:'manual_buy_result', success, contractId, payout, error }
+        // { type:'manual_buy_result', payload:{ clientRef, success, contractId, payout, error } }
         case 'manual_buy_result': {
           cbRef.current.onManualBuyResult?.(payload as unknown as ManualBuyResult)
           break
         }
 
         // ── Compra manual: resultado final do contrato ─────────
-        // Backend deve emitir: { type:'manual_trade_closed', contractId, profit, won, stake, exitTick, exitDigit }
+        // { type:'manual_trade_closed', payload:{ clientRef, contractId, profit, won, stake, exitTick, exitDigit } }
         case 'manual_trade_closed': {
           cbRef.current.onManualTradeClosed?.(payload as unknown as ManualTradeClosed)
           break
         }
 
+        // ── Compra manual: não foi possível acompanhar o fecho ──
+        case 'manual_trade_error': {
+          cbRef.current.onManualTradeError?.(payload as unknown as ManualTradeError)
+          break
+        }
+
+        // ── O servidor mudou o mercado de um bot ────────────────
+        case 'bot_symbol_fallback': {
+          const p = payload as Partial<SymbolFallbackInfo>
+          if (p.from && p.to) cbRef.current.onSymbolFallback?.({ from: p.from, to: p.to, reason: p.reason })
+          break
+        }
+
         case 'authenticated':
+          attemptRef.current = 0 // autenticou: ligação boa, zera o backoff
           send('list_bots')
           send('list_session_bots')
           break
 
         case 'deriv_disconnected':
+          cbRef.current.onDerivStatus?.(false)
+          break
+
         case 'deriv_reconnected':
+          cbRef.current.onDerivStatus?.(true)
           break
 
         case 'pong':
@@ -176,11 +255,11 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
           const code = typeof payload.code === 'string' ? payload.code
             : typeof msg.code === 'string' ? msg.code
             : undefined
-          if (code === 'AUTH_FAILED' || code === 'MISSING_TOKEN' || code === 'NO_ACCOUNTS' || code === 'OTP_FAILED') {
+          if (code && FATAL_AUTH_CODES.has(code)) {
             failedAuthKeyRef.current = `${tokenRef.current}:${accountIdRef.current}`
             cbRef.current.onAuthFailed?.()
           }
-          cbRef.current.onError?.(errMsg)
+          if (!code || !SILENT_CODES.has(code)) cbRef.current.onError?.(errMsg)
           break
         }
 
@@ -200,7 +279,9 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
+    const current = wsRef.current
+    // não abrir 2.º socket se já há um aberto OU a ligar
+    if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) return
 
     let ws: WebSocket
     try {
@@ -215,8 +296,8 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     setWsStatus('connecting')
 
     ws.onopen = () => {
-      if (!mountedRef.current) { ws.close(); return }
-      attemptRef.current = 0
+      if (!mountedRef.current || wsRef.current !== ws) { ws.close(); return }
+      openedAtRef.current = Date.now()
       setWsStatus('connected')
       ws.send(JSON.stringify({ type: 'list_bots', payload: {} }))
       if (tokenRef.current && accountIdRef.current) {
@@ -226,13 +307,14 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
           ws.send(JSON.stringify({ type: 'auth', payload: { token: tokenRef.current, accountId: accountIdRef.current } }))
         }
       }
+
+      clearTimers()
       pingRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN)
           ws.send(JSON.stringify({ type: 'ping', payload: {} }))
       }, PING_INTERVAL_MS)
 
       lastMessageAtRef.current = Date.now()
-      if (watchdogRef.current) clearInterval(watchdogRef.current)
       watchdogRef.current = setInterval(() => {
         if (Date.now() - lastMessageAtRef.current > WATCHDOG_TIMEOUT_MS) {
           console.warn('[NexoraWS] sem resposta há 40s — reconectando')
@@ -242,23 +324,28 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     }
 
     ws.onmessage = (e) => {
+      if (wsRef.current !== ws) return
       lastMessageAtRef.current = Date.now()
       handleMessage(e.data)
     }
 
     ws.onerror = () => {
-      if (!mountedRef.current) return
+      if (!mountedRef.current || wsRef.current !== ws) return
       setWsStatus('error')
       cbRef.current.onError?.('Erro de conexão WebSocket')
     }
 
     ws.onclose = () => {
-      if (!mountedRef.current) return
+      // socket já substituído por outro: este evento não interessa
+      if (!mountedRef.current || wsRef.current !== ws) return
       setWsStatus('disconnected')
-      if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null }
-      if (watchdogRef.current) { clearInterval(watchdogRef.current); watchdogRef.current = null }
+      clearTimers()
+      // ligação que aguentou >10 s era boa: recomeça o backoff do zero
+      if (openedAtRef.current && Date.now() - openedAtRef.current > STABLE_CONNECTION_MS) attemptRef.current = 0
+      openedAtRef.current = 0
       const delay = Math.min(1000 * 2 ** attemptRef.current, MAX_RECONNECT_DELAY_MS)
       attemptRef.current += 1
+      if (reconnRef.current) clearTimeout(reconnRef.current)
       reconnRef.current = setTimeout(connect, delay)
     }
   }, [handleMessage])
@@ -268,8 +355,7 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     connect()
     return () => {
       mountedRef.current = false
-      if (pingRef.current) clearInterval(pingRef.current)
-      if (watchdogRef.current) clearInterval(watchdogRef.current)
+      clearTimers()
       if (reconnRef.current) clearTimeout(reconnRef.current)
       wsRef.current?.close()
     }
@@ -278,7 +364,8 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
   useEffect(() => {
     const tryFastReconnect = () => {
       if (!mountedRef.current) return
-      if (wsRef.current?.readyState === WebSocket.OPEN) return
+      const rs = wsRef.current?.readyState
+      if (rs === WebSocket.OPEN || rs === WebSocket.CONNECTING) return
       attemptRef.current = 0
       if (reconnRef.current) { clearTimeout(reconnRef.current); reconnRef.current = null }
       connect()
@@ -309,23 +396,27 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
 
   return {
     wsStatus,
-    listCatalogBots: useCallback(() => send('list_bots'), [send]),
-    listSessionBots: useCallback(() => send('list_session_bots'), [send]),
-    startCatalogBot: useCallback((catalogBotId: string, sessionName?: string, configOverride?: Partial<BotConfig>) =>
-      send('start_catalog_bot', { catalogBotId, sessionName, configOverride: configOverride ?? {} }), [send]),
-    stopBot: useCallback((botId: string) => send('stop_bot', { botId }), [send]),
-    pauseBot: useCallback((botId: string) => send('pause_bot', { botId }), [send]),
-    resumeBot: useCallback((botId: string) => send('resume_bot', { botId }), [send]),
-    deleteBot: useCallback((botId: string) => send('delete_bot', { botId }), [send]),
-    getBotLogs: useCallback((botId: string, limit = 100) => send('get_bot_logs', { botId, limit }), [send]),
-    // ── NOVO: compra manual ────────────────────────────────────
-    manualBuy: useCallback((params: ManualBuyParams) => send('manual_buy', params as unknown as Record<string, unknown>), [send]),
+    listCatalogBots: useCallback(() => { send('list_bots') }, [send]),
+    listSessionBots: useCallback(() => { send('list_session_bots') }, [send]),
+    startCatalogBot: useCallback((catalogBotId: string, sessionName?: string, configOverride?: Partial<BotConfig>) => {
+      sendAction('start_catalog_bot', { catalogBotId, sessionName, configOverride: configOverride ?? {} })
+    }, [sendAction]),
+    stopBot: useCallback((botId: string) => { sendAction('stop_bot', { botId }) }, [sendAction]),
+    pauseBot: useCallback((botId: string) => { sendAction('pause_bot', { botId }) }, [sendAction]),
+    resumeBot: useCallback((botId: string) => { sendAction('resume_bot', { botId }) }, [sendAction]),
+    deleteBot: useCallback((botId: string) => { sendAction('delete_bot', { botId }) }, [sendAction]),
+    getBotLogs: useCallback((botId: string, limit = 100) => { send('get_bot_logs', { botId, limit }) }, [send]),
+    // ── Compra manual ──────────────────────────────────────────
+    // Devolve false se não houver ligação (o BotsContext mostra o erro no ecrã).
+    manualBuy: useCallback((params: ManualBuyParams): boolean =>
+      send('manual_buy', params as unknown as Record<string, unknown>), [send]),
     adminAddCatalogBot: useCallback((dto: {
       name: string; description: string; strategy: BotStrategyType
       defaultConfig: BotConfig; tags?: string[]; isActive?: boolean
-    }) => send('admin_add_catalog_bot', dto as Record<string, unknown>), [send]),
-    adminRemoveCatalogBot: useCallback((id: string) => send('admin_remove_catalog_bot', { id }), [send]),
-    adminUpdateCatalogBot: useCallback((id: string, updates: Record<string, unknown>) =>
-      send('admin_update_catalog_bot', { id, ...updates }), [send]),
+    }) => { sendAction('admin_add_catalog_bot', dto as Record<string, unknown>) }, [sendAction]),
+    adminRemoveCatalogBot: useCallback((id: string) => { sendAction('admin_remove_catalog_bot', { id }) }, [sendAction]),
+    adminUpdateCatalogBot: useCallback((id: string, updates: Record<string, unknown>) => {
+      sendAction('admin_update_catalog_bot', { id, ...updates })
+    }, [sendAction]),
   }
 }
