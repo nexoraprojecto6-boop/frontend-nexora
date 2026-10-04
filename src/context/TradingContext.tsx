@@ -1,4 +1,4 @@
-============================================================
+// ============================================================
 // NEXORA FOREX — Trading Context
 //
 // ÚNICA fonte de dados de mercado (balance, ticks, gráfico).
