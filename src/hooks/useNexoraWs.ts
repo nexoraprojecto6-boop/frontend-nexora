@@ -21,6 +21,17 @@
 //   • tick traz pip_size e symbol (dígito final correto por mercado).
 //   • Ações do utilizador sem ligação avisam em vez de falhar em silêncio.
 //   • clientRef nas compras manuais (liga cada resposta ao pedido certo).
+//
+// ALTERAÇÕES (anti-429 da Deriv):
+//   • Backoff com jitter (±20 %) e base de 1,5 s.
+//   • Espaçamento mínimo de 4 s entre tentativas de ligação: o
+//     "fast reconnect" (focus / visibilitychange / online) já não fura o
+//     backoff — antes, cada clique na janela abria uma ligação nova e
+//     cada ligação nova custa GET contas + POST otp + WS na Deriv.
+//   • Erro AUTH_TEMPORARY / RATE_LIMITED do servidor força backoff
+//     mais longo (≥ 12 s) e desliga o fast reconnect até autenticar.
+//   • Troca de conta (token/accountId) com debounce de 300 ms: trocar
+//     demo ↔ real em sequência já não dispara um auth por clique.
 // ============================================================
 
 import { useEffect, useRef, useCallback, useState } from 'react'
@@ -88,12 +99,21 @@ interface NexoraWsCallbacks {
 const PING_INTERVAL_MS = 15_000
 const WATCHDOG_INTERVAL_MS = 10_000
 const WATCHDOG_TIMEOUT_MS = 40_000
+const BASE_RECONNECT_DELAY_MS = 1_500
 const MAX_RECONNECT_DELAY_MS = 30_000
 const STABLE_CONNECTION_MS = 10_000
+// Mínimo entre duas tentativas de ligação (cada uma custa GET contas + OTP + WS na Deriv)
+const MIN_ATTEMPT_GAP_MS = 4_000
+// Troca de conta: espera o utilizador "assentar" antes de reautenticar
+const AUTH_DEBOUNCE_MS = 300
+// Depois de um limite de taxa, o backoff começa neste nível (1,5 s × 2^3 = 12 s)
+const RATE_LIMIT_MIN_ATTEMPT = 3
 
 // Falhas de login em que a sessão deve terminar (token inválido, sem contas).
 // AUTH_TEMPORARY NÃO está aqui de propósito: é falha temporária, reconecta com backoff.
 const FATAL_AUTH_CODES = new Set(['AUTH_FAILED', 'MISSING_TOKEN', 'NO_ACCOUNTS', 'OTP_FAILED'])
+// Falhas temporárias / limite de taxa: reconectar mais devagar
+const RATE_LIMIT_CODES = new Set(['AUTH_TEMPORARY', 'RATE_LIMITED'])
 // Códigos que não devem mostrar mensagem de erro ao utilizador
 const SILENT_CODES = new Set(['AUTH_IN_PROGRESS'])
 
@@ -103,6 +123,8 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
   const reconnRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const attemptRef = useRef(0)
   const openedAtRef = useRef(0)
+  const lastConnectAtRef = useRef(0)
+  const rateLimitedRef = useRef(false)
   const mountedRef = useRef(true)
   const cbRef = useRef(callbacks)
   cbRef.current = callbacks
@@ -232,6 +254,7 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
 
         case 'authenticated':
           attemptRef.current = 0 // autenticou: ligação boa, zera o backoff
+          rateLimitedRef.current = false
           send('list_bots')
           send('list_session_bots')
           break
@@ -258,6 +281,11 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
           if (code && FATAL_AUTH_CODES.has(code)) {
             failedAuthKeyRef.current = `${tokenRef.current}:${accountIdRef.current}`
             cbRef.current.onAuthFailed?.()
+          }
+          if (code && RATE_LIMIT_CODES.has(code)) {
+            // Deriv a recusar/limitar: reconectar depressa só piora
+            rateLimitedRef.current = true
+            attemptRef.current = Math.max(attemptRef.current, RATE_LIMIT_MIN_ATTEMPT)
           }
           if (!code || !SILENT_CODES.has(code)) cbRef.current.onError?.(errMsg)
           break
@@ -293,6 +321,7 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
       return
     }
     wsRef.current = ws
+    lastConnectAtRef.current = Date.now()
     setWsStatus('connecting')
 
     ws.onopen = () => {
@@ -341,9 +370,19 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
       setWsStatus('disconnected')
       clearTimers()
       // ligação que aguentou >10 s era boa: recomeça o backoff do zero
-      if (openedAtRef.current && Date.now() - openedAtRef.current > STABLE_CONNECTION_MS) attemptRef.current = 0
+      // (exceto se o servidor acabou de sinalizar limite de taxa)
+      if (
+        openedAtRef.current &&
+        Date.now() - openedAtRef.current > STABLE_CONNECTION_MS &&
+        !rateLimitedRef.current
+      ) attemptRef.current = 0
       openedAtRef.current = 0
-      const delay = Math.min(1000 * 2 ** attemptRef.current, MAX_RECONNECT_DELAY_MS)
+
+      // backoff exponencial com jitter ±20 %, respeitando o espaçamento mínimo
+      const base = Math.min(BASE_RECONNECT_DELAY_MS * 2 ** attemptRef.current, MAX_RECONNECT_DELAY_MS)
+      const jittered = Math.round(base * (0.8 + Math.random() * 0.4))
+      const sinceLastConnect = Date.now() - lastConnectAtRef.current
+      const delay = Math.max(jittered, MIN_ATTEMPT_GAP_MS - sinceLastConnect)
       attemptRef.current += 1
       if (reconnRef.current) clearTimeout(reconnRef.current)
       reconnRef.current = setTimeout(connect, delay)
@@ -366,7 +405,11 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
       if (!mountedRef.current) return
       const rs = wsRef.current?.readyState
       if (rs === WebSocket.OPEN || rs === WebSocket.CONNECTING) return
-      attemptRef.current = 0
+      // não furar o espaçamento mínimo entre tentativas
+      if (Date.now() - lastConnectAtRef.current < MIN_ATTEMPT_GAP_MS) return
+      // em limite de taxa, reconectar já só piora: deixa o backoff correr
+      if (rateLimitedRef.current) return
+      attemptRef.current = Math.min(attemptRef.current, 1)
       if (reconnRef.current) { clearTimeout(reconnRef.current); reconnRef.current = null }
       connect()
     }
@@ -388,10 +431,17 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     const authKey = `${token}:${accountId}`
     if (lastAuthSentRef.current === authKey) return
     if (failedAuthKeyRef.current === authKey) return
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) return
-    lastAuthSentRef.current = authKey
-    ws.send(JSON.stringify({ type: 'auth', payload: { token, accountId } }))
+
+    // debounce: trocas rápidas demo ↔ real só enviam o último auth
+    const timer = setTimeout(() => {
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+      if (lastAuthSentRef.current === authKey) return
+      lastAuthSentRef.current = authKey
+      ws.send(JSON.stringify({ type: 'auth', payload: { token, accountId } }))
+    }, AUTH_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
   }, [callbacks.token, callbacks.accountId])
 
   return {
