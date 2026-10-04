@@ -1,4 +1,4 @@
-// ============================================================
+ ============================================================
 // NEXORA FOREX — Bots Context
 //
 // ALTERAÇÃO (Operar Manual): adicionado estado e método para
