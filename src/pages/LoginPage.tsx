@@ -305,16 +305,65 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
 }
 
 // ---------------------------------------------------------------------------
-// Fundo com reflexo de gráfico (puramente decorativo)
+// Fundo animado — gráfico de mercado (velas + linha) em movimento contínuo
+// (puramente decorativo). O padrão repete-se a cada 1200 unidades, por isso
+// o loop é perfeito, sem saltos.
 // ---------------------------------------------------------------------------
+const MKT_W = 1200
+const MKT_STEP = 30
+const MKT_N = MKT_W / MKT_STEP
+
+const mktPrice = (x: number) =>
+  420 - (
+    70 * Math.sin((2 * Math.PI * x / MKT_W) * 2) +
+    45 * Math.sin((2 * Math.PI * x / MKT_W) * 5 + 1) +
+    25 * Math.sin((2 * Math.PI * x / MKT_W) * 11 + 2)
+  )
+
+const mktRnd = (i: number) => {
+  const s = Math.sin(i * 12.9898 + 78.233) * 43758.5453
+  return s - Math.floor(s)
+}
+
+const MKT_CANDLES = Array.from({ length: MKT_N }, (_, i) => {
+  const x = i * MKT_STEP + MKT_STEP / 2
+  const open = mktPrice(x - MKT_STEP / 2) + (mktRnd(i) - 0.5) * 20
+  const close = mktPrice(x + MKT_STEP / 2) + (mktRnd(i + 100) - 0.5) * 20
+  const high = Math.min(open, close) - mktRnd(i + 200) * 22 - 4
+  const low = Math.max(open, close) + mktRnd(i + 300) * 22 + 4
+  return { x, open, close, high, low, up: close <= open }
+})
+
+const MKT_LINE =
+  'M' +
+  Array.from({ length: MKT_N + 1 }, (_, k) => `${k * MKT_STEP},${mktPrice(k * MKT_STEP).toFixed(1)}`).join(' L')
+
+function MarketSeries({ offset }: { offset: number }) {
+  return (
+    <g transform={`translate(${offset} 0)`}>
+      <path d={MKT_LINE} fill="none" stroke="rgba(79,139,255,0.55)" strokeWidth="2" />
+      {MKT_CANDLES.map((c, i) => {
+        const color = c.up ? '#0ecb81' : '#f6465d'
+        const top = Math.min(c.open, c.close)
+        const h = Math.max(Math.abs(c.open - c.close), 2)
+        return (
+          <g key={i}>
+            <line x1={c.x} x2={c.x} y1={c.high} y2={c.low} stroke={color} strokeWidth="1.5" />
+            <rect x={c.x - 6} y={top} width="12" height={h} fill={color} />
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
 function GlassChartBackground() {
   return (
     <>
       <style>{`
-        @keyframes nexora-drift {
-          0%   { transform: translate3d(0, 0, 0) scale(1); }
-          50%  { transform: translate3d(-1.5%, 1%, 0) scale(1.03); }
-          100% { transform: translate3d(0, 0, 0) scale(1); }
+        @keyframes nexora-scroll {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-${MKT_W}px); }
         }
         @keyframes nexora-sheen {
           0%   { opacity: 0.35; }
@@ -331,34 +380,22 @@ function GlassChartBackground() {
 
       <svg
         viewBox="0 0 1200 800"
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMidYMid slice"
         style={{
           position: 'fixed', inset: 0, width: '100%', height: '100%',
-          filter: 'blur(22px)', opacity: 0.5, zIndex: 0,
-          animation: 'nexora-drift 22s ease-in-out infinite',
+          opacity: 0.28, zIndex: 0, pointerEvents: 'none',
         }}
       >
-        <defs>
-          <linearGradient id="nexoraLine" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="rgba(24,87,255,0)" />
-            <stop offset="45%" stopColor="rgba(24,87,255,0.55)" />
-            <stop offset="70%" stopColor="rgba(233,32,63,0.4)" />
-            <stop offset="100%" stopColor="rgba(24,87,255,0)" />
-          </linearGradient>
-          <linearGradient id="nexoraFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(24,87,255,0.18)" />
-            <stop offset="100%" stopColor="rgba(24,87,255,0)" />
-          </linearGradient>
-        </defs>
+        {/* Grelha horizontal fixa */}
+        {[160, 280, 400, 520, 640].map((y) => (
+          <line key={y} x1="0" x2="1200" y1={y} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+        ))}
 
-        <path
-          d="M0,520 L60,500 L120,540 L180,470 L240,510 L300,430 L360,460 L420,380 L480,420 L540,340 L600,390 L660,300 L720,350 L780,260 L840,300 L900,230 L960,270 L1020,200 L1080,240 L1140,180 L1200,220"
-          fill="none" stroke="url(#nexoraLine)" strokeWidth="3"
-        />
-        <path
-          d="M0,520 L60,500 L120,540 L180,470 L240,510 L300,430 L360,460 L420,380 L480,420 L540,340 L600,390 L660,300 L720,350 L780,260 L840,300 L900,230 L960,270 L1020,200 L1080,240 L1140,180 L1200,220 L1200,800 L0,800 Z"
-          fill="url(#nexoraFill)"
-        />
+        {/* Gráfico em movimento (duas cópias seguidas para o loop ser contínuo) */}
+        <g style={{ animation: 'nexora-scroll 45s linear infinite' }}>
+          <MarketSeries offset={0} />
+          <MarketSeries offset={MKT_W} />
+        </g>
       </svg>
 
       <div style={{
