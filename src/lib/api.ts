@@ -1,5 +1,12 @@
 // ============================================================
 // NEXORA FOREX — Cliente API REST
+//
+// ALTERAÇÃO (compatibilidade com o backend): fetchWithAuth agora lança
+// HttpError (com .status) e extrai a mensagem do corpo em qualquer formato
+// ({ error: { message } } | { message } | { error: "texto" }).
+// Antes fazia `err.message || err.error`: quando `error` era um objeto
+// o utilizador via "[object Object]", e não havia como distinguir 401
+// de uma falha de servidor sem procurar texto na mensagem.
 // ============================================================
 
 import { API_BASE_URL, DERIV_APP_ID } from './env'
@@ -170,7 +177,7 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
       window.location.href = '/'
     }
     const err = await response.json().catch(() => ({}))
-    throw new Error(err.message || err.error || `HTTP ${response.status}`)
+    throw new HttpError(extractErrorMessage(err, response.status), response.status)
   }
   return response.json()
 }
@@ -313,7 +320,7 @@ export const api = {
           data.message || 'O token da Deriv para o relatório de comissão expirou ou é inválido.',
         )
       }
-      throw new Error(data?.message || data?.error || `HTTP ${res.status}`)
+      throw new Error(extractErrorMessage(data, res.status))
     }
     return data
   },
@@ -415,7 +422,7 @@ export const api = {
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || `HTTP ${res.status}`)
+      throw new Error(extractErrorMessage(err, res.status))
     }
     return res.json()
   },
