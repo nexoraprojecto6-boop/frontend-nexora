@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { IoTrashOutline, IoTrendingUp, IoDocumentTextOutline, IoNotificationsOutline } from 'react-icons/io5'
 import { useBots } from '../context/BotsContext'
+import { useTrading } from '../context/TradingContext'
 import type { TradeRecord } from '../context/BotsContext'
+import { currencyDecimals } from '../lib/money'
 
 type MainTab = 'trader' | 'notificacoes'
 
@@ -43,9 +45,20 @@ function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: s
   )
 }
 
+// Preço de saída: usa o texto original da Deriv (exitSpot) com as casas reais do
+// símbolo — assim o último algarismo mostrado é o dígito real (antes: sempre 2
+// casas, o que escondia/arredondava o dígito em R_10, R_50, etc.).
+function formatTick(t: TradeRecord): string {
+  if (t.exitSpot) return t.exitSpot
+  return typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : '—'
+}
+
 export function TradesTable() {
   const { trades, clearTrades } = useBots()
+  const { currency } = useTrading()
   const [mainTab, setMainTab] = useState<MainTab>('trader')
+  // casas decimais da moeda da conta (2 em USD/EUR, 8 em BTC...)
+  const dec = currencyDecimals(currency)
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', height: '100%', minHeight: 0, overflow: 'hidden', borderRadius: 0 }}>
@@ -114,12 +127,12 @@ export function TradesTable() {
                   }}>
                     <span className="tabular" style={{ ...cellBase, color: '#fff' }}>{t.hora}</span>
                     <span style={{ ...cellBase, color: '#fff', fontWeight: 600 }}>{t.contractType ?? '—'}</span>
-                    <span className="tabular" style={{ ...cellBase, color: '#fff', textAlign: 'right' }} title={typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : undefined}>
-                      {typeof t.exitTick === 'number' ? t.exitTick.toFixed(2) : '—'}
+                    <span className="tabular" style={{ ...cellBase, color: '#fff', textAlign: 'right' }} title={formatTick(t)}>
+                      {formatTick(t)}
                     </span>
-                    <span className="tabular" style={{ ...cellBase, color: '#fff', textAlign: 'right' }}>{t.stake.toFixed(2)}</span>
+                    <span className="tabular" style={{ ...cellBase, color: '#fff', textAlign: 'right' }}>{t.stake.toFixed(dec)}</span>
                     <span className="tabular" style={{ ...cellBase, textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? '#22c55e' : 'var(--red-hi)' }}>
-                      {Math.abs(t.profit).toFixed(2)}
+                      {Math.abs(t.profit).toFixed(dec)}
                     </span>
                   </div>
                 ))}
