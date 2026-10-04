@@ -162,8 +162,8 @@ export default function LoginPage() {
         ))}
       </div>
 
-      {/* Cartão de entrada */}
-      <div className="card fade-in" style={cardStyle}>
+      {/* Contentor de entrada (sem quadrado/borda) */}
+      <div className="fade-in" style={cardStyle}>
         <div style={{ textAlign: 'center' }}>
           <div className="brand" style={{ justifyContent: 'center', marginBottom: 10 }}>
             <BrandMark size={40} />
@@ -376,7 +376,7 @@ function GlassChartBackground() {
 // ---------------------------------------------------------------------------
 
 // O wrapper rola em vez de cortar: com teclado aberto ou ecrã baixo
-// o cartão nunca fica escondido em cima/baixo.
+// o contentor nunca fica escondido em cima/baixo.
 const pageWrapStyle: React.CSSProperties = {
   position: 'relative', minHeight: '100dvh',
   display: 'flex', justifyContent: 'center',
@@ -403,9 +403,6 @@ const cardStyle: React.CSSProperties = {
   width: '100%', maxWidth: 400,
   margin: 'auto 0',
   padding: 'clamp(24px, 6vw, 44px) clamp(18px, 5vw, 32px) clamp(22px, 5vw, 32px)',
-  borderRadius: 24,
-  background: 'rgba(20,23,31,0.88)',
-  border: '1px solid var(--border)',
 }
 
 const fieldWrapStyle: React.CSSProperties = {
