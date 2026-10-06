@@ -1,83 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { IoOpenOutline, IoMailOutline, IoLockClosedOutline } from 'react-icons/io5'
+import { AO, BR, PT, US, ES } from 'country-flag-icons/react/3x2'
 import { useLoader } from '../context/LoaderContext'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
-import logo from '../logo.png'
 import { inputStyle, labelStyle, errorTextStyle } from '../lib/glass'
-
-// Ícones inline (sem dependência de react-icons)
-function IoMailOutline({ size = 18, style }: { size?: number; style?: React.CSSProperties }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden="true">
-      <rect x="3" y="5" width="18" height="14" rx="2" /><polyline points="3,7 12,13 21,7" />
-    </svg>
-  )
-}
-
-function IoLockClosedOutline({ size = 18, style }: { size?: number; style?: React.CSSProperties }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden="true">
-      <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </svg>
-  )
-}
-
-function IoOpenOutline({ size = 18, style }: { size?: number; style?: React.CSSProperties }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden="true">
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-    </svg>
-  )
-}
-
-// Bandeiras inline (sem dependência de country-flag-icons)
-type FlagProps = { style?: React.CSSProperties }
-const flagSvg = (style: React.CSSProperties | undefined, children: React.ReactNode) => (
-  <svg viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" style={style} aria-hidden="true">
-    {children}
-  </svg>
-)
-
-function AO({ style }: FlagProps) {
-  return flagSvg(style, <>
-    <rect width="30" height="10" fill="#cc092f" />
-    <rect y="10" width="30" height="10" fill="#000" />
-    <circle cx="15" cy="10" r="3.4" fill="none" stroke="#ffcb00" strokeWidth="1.3" />
-  </>)
-}
-function BR({ style }: FlagProps) {
-  return flagSvg(style, <>
-    <rect width="30" height="20" fill="#009c3b" />
-    <polygon points="15,2.5 27,10 15,17.5 3,10" fill="#ffdf00" />
-    <circle cx="15" cy="10" r="4.2" fill="#002776" />
-  </>)
-}
-function PT({ style }: FlagProps) {
-  return flagSvg(style, <>
-    <rect width="12" height="20" fill="#006600" />
-    <rect x="12" width="18" height="20" fill="#ff0000" />
-    <circle cx="12" cy="10" r="3.2" fill="#ffcc00" />
-  </>)
-}
-function US({ style }: FlagProps) {
-  return flagSvg(style, <>
-    <rect width="30" height="20" fill="#fff" />
-    {[0, 2, 4, 6, 8, 10, 12].map((i) => (
-      <rect key={i} y={(i * 20) / 13} width="30" height={20 / 13} fill="#b22234" />
-    ))}
-    <rect width="12" height={(7 * 20) / 13} fill="#3c3b6e" />
-  </>)
-}
-function ES({ style }: FlagProps) {
-  return flagSvg(style, <>
-    <rect width="30" height="20" fill="#aa151b" />
-    <rect y="5" width="30" height="10" fill="#f1bf00" />
-  </>)
-}
-
-// Nome da plataforma (muda só aqui)
-const BRAND_NAME = 'Sinistro'
 
 // ---------------------------------------------------------------------------
 // Bandeiras (apenas visual — não altera nenhuma lógica de autenticação/i18n
@@ -96,16 +24,16 @@ const FLAGS = [
 // Termos e Condições — mostrados no modal depois do login.
 // O texto da Nexora fica embutido; o da Deriv só é linkado.
 // ---------------------------------------------------------------------------
-const TERMOS_NEXORA = `TERMOS E CONDIÇÕES — ${BRAND_NAME.toUpperCase()}
+const TERMOS_NEXORA = `TERMOS E CONDIÇÕES — NEXORA FOREX
 
 1. ACEITAÇÃO DOS TERMOS
-Ao utilizar a plataforma ${BRAND_NAME}, o utilizador aceita integralmente os presentes termos e condições.
+Ao utilizar a plataforma Nexora Forex, o utilizador aceita integralmente os presentes termos e condições.
 
 2. RISCOS
 O trading envolve riscos elevados de perda de capital. Os resultados passados não garantem resultados futuros. O utilizador é o único responsável pelas suas decisões de investimento.
 
 3. RESPONSABILIDADE
-A ${BRAND_NAME} não se responsabiliza por perdas financeiras resultantes do uso da plataforma.
+A Nexora Forex não se responsabiliza por perdas financeiras resultantes do uso da plataforma.
 
 4. CONTACTO
 Para questões, contacte-nos via WhatsApp: +244976289984`
@@ -117,10 +45,29 @@ function termsAlreadyAccepted(): boolean {
   try { return localStorage.getItem(TERMS_ACCEPTED_KEY) === '1' } catch { return false }
 }
 
+// ---------------------------------------------------------------------------
+// Marca — logótipo 100% em SVG/código, sem ficheiro de imagem
+// ---------------------------------------------------------------------------
+function BrandMark({ size = 40 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" className="brand-mark">
+      <path d="M14 1L27 14L14 27L1 14L14 1Z" stroke="url(#nxGradLogin)" strokeWidth="1.6" />
+      <path d="M8 16.5L11.5 12L15 15.5L20 9" stroke="url(#nxGradLogin)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <defs>
+        <linearGradient id="nxGradLogin" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffffff" />
+          <stop offset="0.55" stopColor="var(--blue-hi)" />
+          <stop offset="1" stopColor="var(--red-hi)" />
+        </linearGradient>
+      </defs>
+    </svg>
+  )
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const { show, hide } = useLoader() as any // hide pode não existir consoante a versão do contexto
-  const { isLocalAuthenticated, isLocalLoading, loginLocal, logoutLocal, logout } = useAuth() as any
+  const { isLocalAuthenticated, isLocalLoading, loginLocal, logoutLocal } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -162,13 +109,7 @@ export default function LoginPage() {
       const res = await api.loginLocal(cleanEmail, password)
       loginLocal(res.token, res.user) // o useEffect acima decide o passo seguinte
     } catch (err: any) {
-      // Email já existente com senha errada → 401 do backend.
-      const msg = err?.message || 'Não foi possível entrar.'
-      if (msg.includes('401') || msg.toLowerCase().includes('inválid') || msg.toLowerCase().includes('incorret')) {
-        setError('Email ou senha incorretos.')
-      } else {
-        setError(msg)
-      }
+      setError(err?.message || 'Não foi possível entrar.')
     } finally {
       setIsSubmitting(false)
       try { hide?.() } catch { /* LoaderContext pode não ter hide() */ }
@@ -189,11 +130,7 @@ export default function LoginPage() {
     // Sem aceitar os termos não há acesso: termina só a sessão local
     // (não mexe na sessão Deriv) e fica no ecrã de entrada.
     setShowTerms(false)
-    try {
-      if (typeof logoutLocal === 'function') logoutLocal()
-      else if (typeof logout === 'function') logout()
-      else localStorage.removeItem('token')
-    } catch { /* ignora */ }
+    logoutLocal()
   }
 
   if (isLocalLoading) {
@@ -228,8 +165,10 @@ export default function LoginPage() {
       {/* Contentor de entrada (sem quadrado/borda) */}
       <div className="fade-in" style={cardStyle}>
         <div style={{ textAlign: 'center' }}>
-          <img src={logo} alt={BRAND_NAME} style={{ height: 44, width: 'auto', display: 'block', margin: '0 auto 10px' }} />
-          <h1 className="brand-text brand-text--lg">{BRAND_NAME.toUpperCase()}</h1>
+          <div className="brand" style={{ justifyContent: 'center', marginBottom: 10 }}>
+            <BrandMark size={40} />
+          </div>
+          <h1 className="brand-text brand-text--lg">NEXORA FOREX</h1>
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginTop: 26 }}>
@@ -275,7 +214,7 @@ export default function LoginPage() {
         </p>
 
         <div style={{ marginTop: 20, textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 {BRAND_NAME}</p>
+          <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>© 2026 Nexora Forex</p>
         </div>
       </div>
 
@@ -308,7 +247,7 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
               borderBottom: tab === 'nexora' ? '2px solid var(--blue-hi)' : '2px solid transparent',
             }}
           >
-            {BRAND_NAME.toUpperCase()}
+            NEXORA FOREX
           </button>
           <button
             onClick={() => setTab('deriv')}
@@ -330,10 +269,10 @@ function TermsModal({ onAccept, onDecline }: { onAccept: () => void; onDecline: 
           ) : (
             <div>
               <p style={{ color: 'var(--text-dim)', fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-                Ao ligar a tua conta Deriv através da {BRAND_NAME}, estás também
+                Ao ligar a tua conta Deriv através da Nexora Forex, estás também
                 sujeito aos termos e condições gerais da Deriv, que regulam a
                 abertura de conta, depósitos, levantamentos e a negociação de
-                contratos na própria Deriv. A {BRAND_NAME} não altera nem
+                contratos na própria Deriv. A Nexora Forex não altera nem
                 substitui esses termos.
               </p>
               <a
