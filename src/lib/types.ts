@@ -193,8 +193,8 @@ function buildCommonFields(): StrategyFieldDef[] {
     { key: 'duration', label: 'Duração', type: 'number', defaultValue: 5, min: 1, max: 60, step: 1, group: 'Contrato', description: 'Ticks: 1–10 recomendado. Segundos: 15–60.' },
     { key: 'durationUnit', label: 'Unidade', type: 'select', defaultValue: 'ticks', group: 'Contrato', options: DURATION_UNIT_OPTIONS },
     { key: 'initialStake', label: 'Stake Inicial (USD)', type: 'number', defaultValue: 1, min: 0.35, step: 0.01, group: 'Risco', description: 'Valor apostado no primeiro contrato (mín. $0.35)' },
-    { key: 'maxLoss', label: 'Perda Máxima (USD)', type: 'number', defaultValue: 20, min: 1, step: 0.5, group: 'Risco', description: 'Para o bot quando a perda acumulada atingir este valor' },
-    { key: 'maxProfit', label: 'Take Profit (USD)', type: 'number', defaultValue: 50, min: 1, step: 0.5, group: 'Risco', description: 'Para o bot quando o lucro acumulado atingir este valor' },
+    { key: 'maxLoss', label: 'Perda Máxima (USD)', type: 'number', defaultValue: 10, min: 1, step: 0.5, group: 'Risco', description: 'Para o bot quando a perda acumulada atingir este valor' },
+    { key: 'maxProfit', label: 'Take Profit (USD)', type: 'number', defaultValue: 10, min: 1, step: 0.5, group: 'Risco', description: 'Para o bot quando o lucro acumulado atingir este valor' },
     { key: 'maxTrades', label: 'Máx. Trades (0 = ilimitado)', type: 'number', defaultValue: 0, min: 0, step: 1, group: 'Risco' },
   ]
 }

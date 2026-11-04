@@ -152,6 +152,18 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
 
   const strategyFields = STRATEGY_PARAMS_FIELDS[bot.strategy] ?? []
 
+  // Aviso (só informativo): perda máxima muito acima do take profit significa
+  // muitas pequenas vitórias contra uma perda grande — com contratos de
+  // dígitos (sem vantagem estatística) isso acaba quase sempre em saldo negativo.
+  const riskWarning = useMemo(() => {
+    const loss = Number(cfgVals.maxLoss)
+    const profit = Number(cfgVals.maxProfit)
+    if (!(loss > 0) || !(profit > 0)) return null
+    const ratio = loss / profit
+    if (ratio < 3) return null
+    return `A perda máxima (${loss}) é ${ratio.toFixed(0)}× o take profit (${profit}). Cada sessão ganha pouco e pode perder muito — reduza a perda máxima ou aumente o take profit.`
+  }, [cfgVals.maxLoss, cfgVals.maxProfit])
+
   const handleConfirm = () => {
     const cfg = sanitizeNumericValues(cfgVals, commonFields)
     const prm = sanitizeNumericValues(prmVals, strategyFields)
@@ -189,6 +201,11 @@ function ConfigModal({ bot, onClose, onConfirm }: { bot: CatalogBot; onClose: ()
           </div>
 
           <div className="glass-sheet-body" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {riskWarning && (
+              <div role="alert" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.45)', color: '#f59e0b', borderRadius: 6, padding: '10px 12px', fontSize: 12, lineHeight: 1.45 }}>
+                ⚠️ {riskWarning}
+              </div>
+            )}
             {Object.entries(configGroups).map(([group, fields]) => (
               <div key={group}>
                 <p style={groupTitle}>{group}</p>

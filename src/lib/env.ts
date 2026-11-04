@@ -27,4 +27,4 @@ function deriveWsUrl(): string {
 export const WS_URL: string = deriveWsUrl()
 
 export const DERIV_APP_ID: string =
-  import.meta.env.VITE_DERIV_APP_ID || '33zVF6u28ZwC8XnteDYvr'
+  import.meta.env.VITE_DERIV_APP_ID || '3356rGdzrsnQaEKsg8MMA'
