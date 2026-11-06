@@ -2,8 +2,9 @@
 // NEXORA FOREX — OperarManualPage
 //
 // Réplica do layout Over/Under do dtrader.deriv.com.
-// Gráfico e percentagens: MESMA lógica do ChartSection.tsx
-// (ligação pública direta à Deriv — não passa pelo backend).
+// Gráfico e percentagens: MESMA lógica do ChartSection.tsx — dados da
+// sessão (TradingContext), vindos do backend: ticks_snapshot + tick.
+// Já não abre ligação própria à Deriv.
 // Compra: usa useBots().manualBuy() (backend, via useNexoraWs).
 // Mercados: Over / Under / Matches / Differs
 // (DIGITOVER / DIGITUNDER / DIGITMATCH / DIGITDIFF).
@@ -30,11 +31,8 @@ import { TradesTable } from '../components/TradesTable'
 import { api } from '../lib/api'
 import type { ManualBuyParams } from '../hooks/useNexoraWs'
 
-const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
 const HISTORY_LOAD = 1000
 const ANIM_MS       = 300
-const PING_MS       = 25_000
-const RECONNECT_MS  = 2_500
 
 const COLOR_HOT     = '#2e7d32'
 const COLOR_COLD    = '#c62828'
@@ -80,11 +78,6 @@ function Portal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body)
 }
 
-function lastDigit(q: number): number {
-  const s = q.toFixed(2)
-  return parseInt(s[s.length - 1], 10)
-}
-
 function calcAll(hist: number[], win: number) {
   const slice  = hist.slice(-win)
   const n      = slice.length || 1
@@ -105,8 +98,11 @@ const fieldStyle: React.CSSProperties = {
 
 function OperarManualInner() {
   const navigate = useNavigate()
-  const { manualBuy, manualPendingTrade, manualBuyError, manualTrades } = useBots()
-  const { balance, currency, profit, wins, losses, loading: tradingLoading } = useTrading()
+  const { manualBuy, manualPendingTrade, manualBuyError, manualTrades, subscribeTicks, availableSymbols } = useBots()
+  const {
+    balance, currency, profit, wins, losses, loading: tradingLoading,
+    tickCount, snapshotVersion, getDigits, isConnected,
+  } = useTrading()
 
   // ── Troca de conta (Real/Demo) — MESMA lógica do ControlsSection.tsx ──
   const { accounts, currentAccount, setCurrentAccount, localUser } = useAuth()
@@ -167,29 +163,24 @@ function OperarManualInner() {
     return () => { if (lastResultTimerRef.current) clearTimeout(lastResultTimerRef.current) }
   }, [])
 
-  // ── Estado do gráfico / dígitos (idêntico ao ChartSection) ──
+  // ── Estado do gráfico / dígitos (dados do TradingContext) ───
   const [symbol, setSymbol] = useState('1HZ100V')
   const [win, setWin] = useState(25)
-  const [phase, setPhase] = useState<'connecting' | 'loading' | 'live' | 'error'>('connecting')
-  const [tkCnt, setTkCnt] = useState(0)
+  const [switching, setSwitching] = useState(false)   // à espera do snapshot do novo mercado
   const [info, setInfo] = useState(() => calcAll([], 25))
   const [bars, setBars] = useState<number[]>(Array(10).fill(0))
   const [winOpen, setWinOpen] = useState(false)
 
-  const hist = useRef<number[]>([])
   const target = useRef<number[]>(Array(10).fill(0))
   const current = useRef<number[]>(Array(10).fill(0))
   const animating = useRef(false)
   const animStart = useRef<number[]>(Array(10).fill(0))
   const animT0 = useRef(0)
-  const wsRef = useRef<WebSocket | null>(null)
-  const pingRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const reconnRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mounted = useRef(true)
-  const winRef = useRef(win)
-  const symRef = useRef(symbol)
-  winRef.current = win
-  symRef.current = symbol
+  const snapRef = useRef(-1)
+  const waitSnapRef = useRef<number | null>(null)
+  const snapshotVersionRef = useRef(snapshotVersion)
+  snapshotVersionRef.current = snapshotVersion
 
   const startRaf = useCallback(() => {
     animStart.current = [...current.current]
@@ -214,85 +205,58 @@ function OperarManualInner() {
     else startRaf()
   }, [startRaf])
 
-  const onTick = useCallback((price: number) => {
-    const d = lastDigit(price)
-    hist.current.push(d)
-    if (hist.current.length > 5000) hist.current = hist.current.slice(-5000)
-    const all = calcAll(hist.current, winRef.current)
-    applyPcts(all.pcts, false)
-    setInfo(all)
-    setTkCnt(hist.current.length)
-    setPhase('live')
-  }, [applyPcts])
-
-  const connect = useCallback((sym: string) => {
-    if (pingRef.current) clearInterval(pingRef.current)
-    if (reconnRef.current) clearTimeout(reconnRef.current)
-    if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
-
-    setPhase('connecting')
-    const ws = new WebSocket(PUBLIC_WS)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      if (!mounted.current) { ws.close(); return }
-      setPhase('loading')
-      ws.send(JSON.stringify({ ticks_history: sym, end: 'latest', count: HISTORY_LOAD, style: 'ticks', req_id: 1 }))
-      ws.send(JSON.stringify({ ticks: sym, subscribe: 1, req_id: 2 }))
-      pingRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }))
-      }, PING_MS)
-    }
-
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data as string)
-      if (msg.error) return
-      if (msg.msg_type === 'history' && Array.isArray(msg.history?.prices)) {
-        hist.current = (msg.history.prices as number[]).map(lastDigit)
-        const all = calcAll(hist.current, winRef.current)
-        applyPcts(all.pcts, true)
-        setInfo(all)
-        setTkCnt(hist.current.length)
-        setPhase('live')
-        return
-      }
-      if (msg.msg_type === 'tick' && msg.tick?.quote != null) onTick(msg.tick.quote as number)
-    }
-
-    ws.onerror = () => { if (mounted.current) setPhase('error') }
-    ws.onclose = () => {
-      if (!mounted.current) return
-      if (pingRef.current) clearInterval(pingRef.current)
-      reconnRef.current = setTimeout(() => connect(symRef.current), RECONNECT_MS)
-    }
-  }, [applyPcts, onTick])
-
-  useEffect(() => {
-    hist.current = []
-    target.current = Array(10).fill(0)
-    current.current = Array(10).fill(0)
-    setBars(Array(10).fill(0))
-    setTkCnt(0)
-    setInfo(calcAll([], win))
-    connect(symbol)
-  }, [symbol]) // eslint-disable-line
-
   useEffect(() => {
     mounted.current = true
-    return () => {
-      mounted.current = false
-      if (pingRef.current) clearInterval(pingRef.current)
-      if (reconnRef.current) clearTimeout(reconnRef.current)
-      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
-    }
+    return () => { mounted.current = false }
   }, [])
 
+  // Mercado escolhido → pede ao backend histórico + ticks desse mercado.
+  // (1.ª execução = montagem: o dashboard já deixou dados em contexto, mostra-os.)
+  const firstSymbolRun = useRef(true)
   useEffect(() => {
-    if (hist.current.length === 0) return
-    const all = calcAll(hist.current, win)
-    applyPcts(all.pcts, false)
+    if (firstSymbolRun.current) firstSymbolRun.current = false
+    else {
+      waitSnapRef.current = snapshotVersionRef.current
+      setSwitching(true)
+      target.current = Array(10).fill(0)
+      current.current = Array(10).fill(0)
+      setBars(Array(10).fill(0))
+      setInfo(calcAll([], win))
+    }
+    subscribeTicks(symbol, HISTORY_LOAD)
+  }, [symbol, subscribeTicks]) // eslint-disable-line
+
+  // Recalcula a cada tick, novo histórico ou mudança de janela
+  useEffect(() => {
+    // trocou de mercado: ignora ticks do mercado antigo até chegar o snapshot novo
+    if (waitSnapRef.current !== null) {
+      if (snapshotVersion === waitSnapRef.current) return
+      waitSnapRef.current = null
+      setSwitching(false)
+    }
+    const h = getDigits()
+    if (h.length === 0) return
+    const snap = snapRef.current !== snapshotVersion
+    snapRef.current = snapshotVersion
+    const all = calcAll(h, win)
+    applyPcts(all.pcts, snap)
     setInfo(all)
-  }, [win, applyPcts])
+  }, [tickCount, snapshotVersion, win, getDigits, applyPcts])
+
+  // Estado da ligação (derivado — já não há WS próprio)
+  const phase: 'connecting' | 'loading' | 'live' =
+    switching ? 'loading' : info.total > 0 ? 'live' : isConnected ? 'loading' : 'connecting'
+
+  // Lista de mercados: a da conta (backend) quando disponível; senão a fixa.
+  const symbolOptions = (() => {
+    const open = availableSymbols.filter(s => s.isOpen)
+    const synth = open.filter(s => s.market === 'synthetic_index')
+    const list = synth.length ? synth : open
+    const opts = list.map(s => ({ value: s.symbol, label: s.name || s.symbol }))
+    if (!opts.length) return SYMBOLS
+    if (!opts.some(o => o.value === symbol)) opts.unshift({ value: symbol, label: SYMBOLS.find(x => x.value === symbol)?.label ?? symbol })
+    return opts
+  })()
 
   // ── Estado do painel de operação ─────────────────────────────
   const [market, setMarket] = useState<MarketType>('over')
@@ -399,15 +363,15 @@ function OperarManualInner() {
                 onChange={(e) => setSymbol(e.target.value)}
                 style={{ ...fieldStyle, width: 'auto', minHeight: 36, padding: '6px 10px', fontSize: 13 }}
               >
-                {SYMBOLS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {symbolOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
 
               <span style={{
                 width: 8, height: 8, borderRadius: '50%',
-                background: phase === 'live' ? '#3ddc84' : phase === 'error' ? '#ff5c5c' : '#e0a63d',
+                background: phase === 'live' ? '#3ddc84' : '#e0a63d',
               }} />
               <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                {phase === 'live' ? 'Ligado' : phase === 'error' ? 'Erro' : 'A ligar…'}
+                {phase === 'live' ? 'Ligado' : isConnected ? 'A carregar…' : 'A ligar…'}
               </span>
 
               <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>

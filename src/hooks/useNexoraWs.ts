@@ -77,6 +77,16 @@ export interface ManualTradeError {
   message: string
 }
 
+/** Mercado disponível para a conta (vem do backend: active_symbols). */
+export interface MarketSymbol {
+  symbol: string
+  name?: string
+  market?: string
+  submarket?: string
+  isOpen: boolean
+  pipSize?: number
+}
+
 interface NexoraWsCallbacks {
   onCatalogLoaded?: (bots: CatalogBot[]) => void
   onSessionBotsLoaded?: (bots: BotSummary[]) => void
@@ -87,6 +97,8 @@ interface NexoraWsCallbacks {
   onAuthFailed?: () => void
   onBalance?: (balance: number, currency: string) => void
   onTick?: (quote: number, pipSize?: number, symbol?: string) => void
+  onTicksSnapshot?: (symbol: string, prices: number[], pipSize?: number) => void
+  onAvailableSymbols?: (symbols: MarketSymbol[]) => void
   onManualBuyResult?: (result: ManualBuyResult) => void
   onManualTradeClosed?: (trade: ManualTradeClosed) => void
   onManualTradeError?: (err: ManualTradeError) => void
@@ -135,6 +147,9 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
   const failedAuthKeyRef = useRef<string>('')
   const lastMessageAtRef = useRef<number>(Date.now())
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Gráfico: mercado pedido (re-enviado após cada autenticação) e estado da auth
+  const tickReqRef = useRef<{ symbol: string; count: number } | null>(null)
+  const authedRef = useRef(false)
   tokenRef.current = callbacks.token ?? null
   accountIdRef.current = callbacks.accountId ?? null
 
@@ -252,11 +267,30 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
           break
         }
 
+        // ── Gráfico: histórico inicial do mercado pedido ───────
+        // { type:'ticks_snapshot', payload:{ symbol, prices[], pip_size } }
+        case 'ticks_snapshot': {
+          const p = payload as { symbol?: string; prices?: number[]; pip_size?: number }
+          if (p.symbol && Array.isArray(p.prices)) cbRef.current.onTicksSnapshot?.(p.symbol, p.prices, p.pip_size)
+          break
+        }
+
+        // ── Lista de mercados da conta ──────────────────────────
+        case 'available_symbols': {
+          const p = payload as { symbols?: MarketSymbol[] }
+          if (Array.isArray(p.symbols)) cbRef.current.onAvailableSymbols?.(p.symbols)
+          break
+        }
+
         case 'authenticated':
           attemptRef.current = 0 // autenticou: ligação boa, zera o backoff
           rateLimitedRef.current = false
+          authedRef.current = true
           send('list_bots')
           send('list_session_bots')
+          send('get_available_symbols')
+          // (re)subscreve o gráfico: vale para o 1.º login, troca de conta e reconexões
+          if (tickReqRef.current) send('subscribe_ticks', tickReqRef.current)
           break
 
         case 'deriv_disconnected':
@@ -368,6 +402,7 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
       // socket já substituído por outro: este evento não interessa
       if (!mountedRef.current || wsRef.current !== ws) return
       setWsStatus('disconnected')
+      authedRef.current = false
       clearTimers()
       // ligação que aguentou >10 s era boa: recomeça o backoff do zero
       // (exceto se o servidor acabou de sinalizar limite de taxa)
@@ -446,6 +481,18 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
 
   return {
     wsStatus,
+    // ── Gráfico / mercados (dados da sessão, via backend) ───────
+    // Guarda o pedido e envia já se autenticado; após reconexão/troca de
+    // conta é reenviado em 'authenticated'.
+    subscribeTicks: useCallback((symbol: string, count = 1000) => {
+      tickReqRef.current = { symbol, count }
+      if (authedRef.current) send('subscribe_ticks', { symbol, count })
+    }, [send]),
+    unsubscribeTicks: useCallback(() => {
+      tickReqRef.current = null
+      send('unsubscribe_ticks')
+    }, [send]),
+    getAvailableSymbols: useCallback(() => { send('get_available_symbols') }, [send]),
     listCatalogBots: useCallback(() => { send('list_bots') }, [send]),
     listSessionBots: useCallback(() => { send('list_session_bots') }, [send]),
     startCatalogBot: useCallback((catalogBotId: string, sessionName?: string, configOverride?: Partial<BotConfig>) => {

@@ -28,6 +28,7 @@ import type {
 } from '../lib/types'
 import {
   useNexoraWs, ManualBuyParams, ManualBuyResult, ManualTradeClosed, ManualTradeError,
+  MarketSymbol,
 } from '../hooks/useNexoraWs'
 import { useAuth } from './AuthContext'
 import { useTrading } from './TradingContext'
@@ -94,6 +95,10 @@ interface BotsCtx {
   manualPendingTrade: ManualTradeRecord | null
   manualTrades: ManualTradeRecord[]
   manualBuyError: string | null
+  /** Gráfico: pede ao backend histórico + ticks deste mercado. */
+  subscribeTicks: (symbol: string, count?: number) => void
+  /** Mercados disponíveis para a conta (vazio até o backend responder). */
+  availableSymbols: MarketSymbol[]
 }
 
 const Ctx = createContext<BotsCtx | null>(null)
@@ -105,6 +110,7 @@ export function useBots() {
 }
 
 const MAX_TRADES = 300
+const CHART_SYMBOL = '1HZ100V'   // mercado inicial do gráfico do dashboard
 const MAX_MANUAL_TRADES = 100
 
 export function BotsProvider({ children }: { children: ReactNode }) {
@@ -188,6 +194,13 @@ export function BotsProvider({ children }: { children: ReactNode }) {
   const handleTick = useCallback((quote: number, pipSize?: number, symbol?: string) => {
     trading._setTick(quote, pipSize, symbol)
   }, [trading._setTick])
+
+  const handleTicksSnapshot = useCallback((symbol: string, prices: number[], pipSize?: number) => {
+    trading._setTicksSnapshot(symbol, prices, pipSize)
+  }, [trading._setTicksSnapshot])
+
+  const [availableSymbols, setAvailableSymbols] = useState<MarketSymbol[]>([])
+  const handleAvailableSymbols = useCallback((list: MarketSymbol[]) => setAvailableSymbols(list), [])
 
   // ── Handlers de compra manual ──────────────────────────────
   const takeParamsByRef = (clientRef?: string): ManualBuyParams | null => {
@@ -405,6 +418,7 @@ export function BotsProvider({ children }: { children: ReactNode }) {
     onBotStarted: handleBotStarted, onBotEvent: handleBotEvent,
     onBotLogs: handleBotLogs, onError: showError, onAuthFailed: handleAuthFailed,
     onBalance: handleBalance, onTick: handleTick,
+    onTicksSnapshot: handleTicksSnapshot, onAvailableSymbols: handleAvailableSymbols,
     onManualBuyResult: handleManualBuyResult, onManualTradeClosed: handleManualTradeClosed,
     onManualTradeError: handleManualTradeError,
     onSymbolFallback: handleSymbolFallback, onDerivStatus: handleDerivStatus,
@@ -427,6 +441,10 @@ export function BotsProvider({ children }: { children: ReactNode }) {
   }, [ws.manualBuy, showManualError])
 
   useEffect(() => { trading._setConnected(ws.wsStatus === 'connected') }, [ws.wsStatus]) // eslint-disable-line
+
+  // Gráfico: mercado por defeito. subscribeTicks é estável (useCallback) —
+  // se deixar de o ser, isto re-subscreve em loop.
+  useEffect(() => { ws.subscribeTicks(CHART_SYMBOL, 1000) }, [ws.subscribeTicks])
 
   // Ligação ao servidor caiu: o servidor deixa de acompanhar os contratos
   // manuais em curso (o resultado já não chega). Não deixa o ecrã preso.
@@ -457,6 +475,8 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       manualPendingTrade,
       manualTrades,
       manualBuyError,
+      subscribeTicks: ws.subscribeTicks,
+      availableSymbols,
     }}>
       {children}
     </Ctx.Provider>
