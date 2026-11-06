@@ -1,35 +1,22 @@
 // ============================================================
-// NEXORA FOREX — ChartSection  v7
-// Design igual à imagem de referência:
-//   - Barras neutras cinza azulado, hot (máx) verde, cold (mín) vermelho
-//   - Header: botão Operar Manual | Last Digits: X | N ticks | selector
-// Lógica de dados: idêntica (WS pública + ticks_history).
-// Alterações v7: apenas visual — ícones da biblioteca, números em fonte
-// mono, medidas fluidas para não cortar em ecrãs estreitos.
+// NEXORA FOREX — ChartSection  v8
+// Os dados (histórico + ticks) vêm do TradingContext, que os recebe
+// do backend pela ligação autenticada da sessão. Já não abre WebSocket
+// próprio. Visual igual ao v7; animação das barras mais curta (120 ms).
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IoChevronDown, IoChevronUp, IoTrendingUp } from 'react-icons/io5'
+import { useTrading } from '../context/TradingContext'
 
-// ── Config ───────────────────────────────────────────────────
-const PUBLIC_WS    = 'wss://api.derivws.com/trading/v1/options/ws/public'
-const HISTORY_LOAD = 1000
-const ANIM_MS       = 300
-const PING_MS       = 25_000
-const RECONNECT_MS  = 2_500
+const ANIM_MS = 120
 
 const COLOR_HOT     = '#2e7d32'
 const COLOR_COLD    = '#c62828'
 const COLOR_NEUTRAL = '#b8bcc8'
 
 const WINDOWS = [25, 50, 100, 250, 500, 1000]
-
-// ── Utilitários ───────────────────────────────────────────────
-function lastDigit(q: number): number {
-  const s = q.toFixed(2)
-  return parseInt(s[s.length - 1], 10)
-}
 
 function calcPcts(hist: number[], win: number): number[] {
   const slice  = hist.slice(-win)
@@ -43,173 +30,84 @@ function calcAll(hist: number[], win: number) {
   const slice  = hist.slice(-win)
   const n      = slice.length || 1
   const counts = Array(10).fill(0) as number[]
-  let even = 0, over = 0
-  slice.forEach(d => { counts[d]++; if (d % 2 === 0) even++; if (d >= 5) over++ })
+  slice.forEach(d => { counts[d]++ })
   const pcts   = counts.map(c => (c / n) * 100)
-  const maxPct = Math.max(...pcts)
-  const minPct = Math.min(...pcts)
   return {
-    pcts, maxPct, minPct,
-    hotDigit:  pcts.indexOf(maxPct),
-    coldDigit: pcts.indexOf(minPct),
-    evenPct:   (even / n) * 100,
-    overPct:   (over / n) * 100,
-    total:     slice.length,
+    pcts,
+    maxPct: Math.max(...pcts),
+    minPct: Math.min(...pcts),
+    total:  slice.length,
   }
 }
 
-// ── Componente principal ──────────────────────────────────────
 export function ChartSection() {
   const navigate = useNavigate()
-  const [symbol]  = useState('1HZ100V')
-  const [win,       setWin]       = useState(25)
-  const [phase,     setPhase]     = useState<'connecting'|'loading'|'live'|'error'>('connecting')
-  const [tkCnt,     setTkCnt]     = useState(0)
-  const [info,      setInfo]      = useState(() => calcAll([], 25))
-  const [bars,      setBars]      = useState<number[]>(Array(10).fill(0))
-  const [winOpen,   setWinOpen]   = useState(false)
+  const { tickCount, snapshotVersion, getDigits, isConnected } = useTrading()
 
-  // Refs internas
-  const hist      = useRef<number[]>([])
+  const [win,     setWin]     = useState(25)
+  const [info,    setInfo]    = useState(() => calcAll([], 25))
+  const [bars,    setBars]    = useState<number[]>(Array(10).fill(0))
+  const [winOpen, setWinOpen] = useState(false)
+
   const target    = useRef<number[]>(Array(10).fill(0))
   const current   = useRef<number[]>(Array(10).fill(0))
   const animating = useRef(false)
   const animStart = useRef<number[]>(Array(10).fill(0))
   const animT0    = useRef(0)
-  const wsRef     = useRef<WebSocket | null>(null)
-  const pingRef   = useRef<ReturnType<typeof setInterval> | null>(null)
-  const reconnRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mounted   = useRef(true)
-  const winRef    = useRef(win)
-  const symRef    = useRef(symbol)
-  winRef.current  = win
-  symRef.current  = symbol
+  const snapRef   = useRef(-1)
 
   const startRaf = useCallback(() => {
     animStart.current = [...current.current]
     animT0.current = performance.now()
     if (animating.current) return
     animating.current = true
-    const tick = (now: number) => {
+    const step = (now: number) => {
       if (!mounted.current) { animating.current = false; return }
-      const elapsed = now - animT0.current
-      const p = Math.min(1, elapsed / ANIM_MS)
+      const p = Math.min(1, (now - animT0.current) / ANIM_MS)
       const s = animStart.current
       const t = target.current
       const c = current.current
-      for (let i = 0; i < 10; i++) {
-        c[i] = s[i] + (t[i] - s[i]) * p
-      }
+      for (let i = 0; i < 10; i++) c[i] = s[i] + (t[i] - s[i]) * p
       setBars([...c])
-      if (p < 1) { requestAnimationFrame(tick) }
-      else       { animating.current = false }
+      if (p < 1) requestAnimationFrame(step)
+      else animating.current = false
     }
-    requestAnimationFrame(tick)
+    requestAnimationFrame(step)
   }, [])
 
-  const applyPcts = useCallback((pcts: number[], snap = false) => {
+  const applyPcts = useCallback((pcts: number[], snap: boolean) => {
     target.current = [...pcts]
     if (snap) { current.current = [...pcts]; setBars([...pcts]) }
     else startRaf()
   }, [startRaf])
 
-  const onTick = useCallback((price: number) => {
-    const d = lastDigit(price)
-    hist.current.push(d)
-    if (hist.current.length > 5000) hist.current = hist.current.slice(-5000)
-    const pcts = calcPcts(hist.current, winRef.current)
-    const all  = calcAll(hist.current, winRef.current)
-    applyPcts(pcts, false)
-    setInfo(all)
-    setTkCnt(hist.current.length)
-    setPhase('live')
-  }, [applyPcts])
-
-  const connect = useCallback((sym: string) => {
-    if (pingRef.current)   clearInterval(pingRef.current)
-    if (reconnRef.current) clearTimeout(reconnRef.current)
-    if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
-
-    setPhase('connecting')
-    const ws = new WebSocket(PUBLIC_WS)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      if (!mounted.current) { ws.close(); return }
-      setPhase('loading')
-      ws.send(JSON.stringify({ ticks_history: sym, end: 'latest', count: HISTORY_LOAD, style: 'ticks', req_id: 1 }))
-      ws.send(JSON.stringify({ ticks: sym, subscribe: 1, req_id: 2 }))
-      pingRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }))
-      }, PING_MS)
-    }
-
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data as string)
-      if (msg.error) return
-      if (msg.msg_type === 'history' && Array.isArray(msg.history?.prices)) {
-        hist.current = (msg.history.prices as number[]).map(lastDigit)
-        const pcts = calcPcts(hist.current, winRef.current)
-        const all  = calcAll(hist.current, winRef.current)
-        applyPcts(pcts, true)
-        setInfo(all)
-        setTkCnt(hist.current.length)
-        setPhase('live')
-        return
-      }
-      if (msg.msg_type === 'tick' && msg.tick?.quote != null) {
-        onTick(msg.tick.quote as number)
-      }
-    }
-
-    ws.onerror = () => { if (mounted.current) setPhase('error') }
-    ws.onclose = () => {
-      if (!mounted.current) return
-      if (pingRef.current) clearInterval(pingRef.current)
-      reconnRef.current = setTimeout(() => connect(symRef.current), RECONNECT_MS)
-    }
-  }, [applyPcts, onTick])
-
-  useEffect(() => {
-    hist.current    = []
-    target.current  = Array(10).fill(0)
-    current.current = Array(10).fill(0)
-    setBars(Array(10).fill(0))
-    setTkCnt(0)
-    setInfo(calcAll([], win))
-    connect(symbol)
-  }, [symbol]) // eslint-disable-line
-
   useEffect(() => {
     mounted.current = true
-    return () => {
-      mounted.current = false
-      if (pingRef.current)   clearInterval(pingRef.current)
-      if (reconnRef.current) clearTimeout(reconnRef.current)
-      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close() }
-    }
+    return () => { mounted.current = false }
   }, [])
 
+  // Recalcula a cada tick, a cada novo histórico e quando muda a janela
   useEffect(() => {
-    if (hist.current.length === 0) return
-    const pcts = calcPcts(hist.current, win)
-    const all  = calcAll(hist.current, win)
-    applyPcts(pcts, false)
-    setInfo(all)
-  }, [win, applyPcts])
+    const hist = getDigits()
+    if (hist.length === 0) return
+    const snap = snapRef.current !== snapshotVersion
+    snapRef.current = snapshotVersion
+    applyPcts(calcPcts(hist, win), snap)
+    setInfo(calcAll(hist, win))
+  }, [tickCount, snapshotVersion, win, getDigits, applyPcts])
 
-  const maxPct = info.maxPct
-  const minPct = info.minPct
+  const { maxPct, minPct } = info
+  const hist   = getDigits()
+  const lastD  = hist.length > 0 ? hist[hist.length - 1] : null
+  const maxBar = Math.max(...bars, 10)
+  const loading = info.total === 0
 
   function getBarColor(pct: number): string {
     if (Math.abs(pct - maxPct) < 0.01) return COLOR_HOT
     if (Math.abs(pct - minPct) < 0.01) return COLOR_COLD
     return COLOR_NEUTRAL
   }
-
-  const lastD    = hist.current.length > 0 ? hist.current[hist.current.length - 1] : null
-  const maxBar   = Math.max(...bars, 10)
-  void tkCnt
 
   return (
     <div className="card" style={{ overflow: 'visible' }}>
@@ -219,7 +117,6 @@ export function ChartSection() {
         display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1.5vw, 10px)',
         padding: 'clamp(8px, 2vw, 10px) clamp(8px, 3vw, 14px)', borderBottom: '1px solid var(--border)',
       }}>
-        {/* Botão único — abre a página de Operar Manual */}
         <button
           onClick={() => navigate('/operar-manual')}
           aria-label="Operar Manual"
@@ -235,7 +132,6 @@ export function ChartSection() {
           <IoTrendingUp size={19} />
         </button>
 
-        {/* Label central */}
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0, overflow: 'hidden' }}>
           <span style={{ fontSize: 'clamp(12px, 3.6vw, 17px)', fontWeight: 500, whiteSpace: 'nowrap' }}>
             <span style={{ color: 'var(--white)' }}>Last Digits: </span>
@@ -245,10 +141,9 @@ export function ChartSection() {
           </span>
         </div>
 
-        {/* Contagem + selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
           <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 'clamp(11px, 3.2vw, 15px)', whiteSpace: 'nowrap' }}>
-            {phase === 'loading' ? '...' : <><span className="tabular">{Math.min(info.total, win)}</span> ticks</>}
+            {loading ? (isConnected ? '...' : 'offline') : <><span className="tabular">{Math.min(info.total, win)}</span> ticks</>}
           </span>
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <button onClick={() => setWinOpen(o => !o)} aria-label="Número de ticks" style={{

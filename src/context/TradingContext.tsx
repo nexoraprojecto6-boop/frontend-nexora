@@ -2,19 +2,10 @@
 // NEXORA FOREX — Trading Context
 //
 // ÚNICA fonte de dados de mercado (balance, ticks, gráfico).
-// Nunca abre WebSocket própria para a Deriv — todos os dados
-// vêm do backend via BotsProvider/useNexoraWs. Isto evita o bug
-// de ligações concorrentes à Deriv (limite de 5/conta) e dados
-// de tick dessincronizados entre componentes.
-//
-// ALTERAÇÕES (compatibilidade com o backend):
-//   • O último dígito usa o pip_size REAL do tick (antes: sempre 2
-//     casas → dígito errado em R_10/R_25/R_50/R_75, que têm 3–4).
-//   • Os ticks podem vir de vários mercados (bots diferentes, ou o
-//     bot mudou de mercado). O gráfico segue UM mercado: o primeiro
-//     que chega; só muda quando esse fica mudo (ex: mudança automática
-//     de mercado), e nesse caso o histórico de dígitos recomeça.
-//   • Vitória = lucro > 0 (antes: lucro 0 contava como vitória).
+// Os ticks vêm do backend pela ligação da sessão:
+//   • ticks_snapshot → histórico inicial (substitui tudo)
+//   • tick           → cada tick novo (aplicado de imediato)
+// O último dígito usa o pip_size real do tick.
 // ============================================================
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
@@ -56,11 +47,15 @@ interface TradingContextValue {
   chartData: ChartData | null
   lastDigits: number[]
   tickCount: number
+  snapshotVersion: number
   isConnected: boolean
   loading: boolean
 
   selectedTicks: number
   setSelectedTicks: (t: number) => void
+
+  /** Histórico de dígitos (do mais antigo ao mais recente). Não alterar. */
+  getDigits: () => number[]
 
   trades: Trade[]
   clearTrades: () => void
@@ -69,6 +64,7 @@ interface TradingContextValue {
 
   _setBalance: (b: number, c: string) => void
   _setTick: (quote: number, pipSize?: number, symbol?: string) => void
+  _setTicksSnapshot: (symbol: string, prices: number[], pipSize?: number) => void
   _setBotStatus: (s: BotStatusUi) => void
   _addTrade: (t: Trade) => void
   _setConnected: (v: boolean) => void
@@ -78,12 +74,12 @@ const TradingContext = createContext<TradingContextValue | undefined>(undefined)
 
 const MAX_DIGIT_HISTORY = 1000
 const MAX_LAST_STRIP = 24
-// Rede de segurança: se nenhum tick chegar neste intervalo, o
-// loader do dashboard deixa de ficar preso para sempre (o status
-// "offline" do indicador WS continua a refletir a realidade).
 const LOADING_SAFETY_TIMEOUT_MS = 8000
-// Um mercado só é trocado por outro se ficou sem ticks este tempo.
-const SYMBOL_SWITCH_SILENCE_MS = 10_000
+
+function digitOf(quote: number, pipSize?: number): number {
+  const s = quote.toFixed(decimalsFromPip(pipSize, 2))
+  return parseInt(s[s.length - 1], 10)
+}
 
 function computeBarData(digits: number[], windowSize: number): BarEntry[] {
   const slice = digits.slice(-windowSize)
@@ -105,6 +101,7 @@ export function TradingProvider({ children }: { children: ReactNode }) {
   const [lastDigit, setLastDigit] = useState(0)
   const [lastDigits, setLastDigits] = useState<number[]>([])
   const [tickCount, setTickCount] = useState(0)
+  const [snapshotVersion, setSnapshotVersion] = useState(0)
   const [chartData, setChartData] = useState<ChartData | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -115,7 +112,6 @@ export function TradingProvider({ children }: { children: ReactNode }) {
   const digitHistory = useRef<number[]>([])
   const selectedTicksRef = useRef(selectedTicks)
   const symbolRef = useRef<string | null>(null)
-  const lastTickAtRef = useRef(0)
   useEffect(() => { selectedTicksRef.current = selectedTicks }, [selectedTicks])
 
   useEffect(() => {
@@ -123,36 +119,43 @@ export function TradingProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [])
 
+  const getDigits = useCallback(() => digitHistory.current, [])
+
   const _setBalance = useCallback((b: number, c: string) => {
     setBalance(b)
     setCurrency(c)
   }, [])
 
+  // Histórico inicial (ou novo histórico após reconexão / troca de mercado)
+  const _setTicksSnapshot = useCallback((symbol: string, prices: number[], pipSize?: number) => {
+    symbolRef.current = symbol
+    const digits = prices
+      .map(p => digitOf(p, pipSize))
+      .filter(d => !Number.isNaN(d))
+      .slice(-MAX_DIGIT_HISTORY)
+    digitHistory.current = digits
+    if (digits.length === 0) return
+
+    const last = digits[digits.length - 1]
+    setLastDigit(last)
+    setLastDigits(digits.slice(-MAX_LAST_STRIP))
+    setChartData({ barData: computeBarData(digits, selectedTicksRef.current), lastDigit: last })
+    setLoading(false)
+    setTickCount(c => c + 1)
+    setSnapshotVersion(v => v + 1)
+  }, [])
+
+  // Tick novo: aplicado de imediato, sem filas nem microtasks
   const _setTick = useCallback((quote: number, pipSize?: number, symbol?: string) => {
-    const now = Date.now()
+    if (symbol && symbolRef.current && symbol !== symbolRef.current) return
 
-    // Segue um só mercado (ver comentário no topo do ficheiro)
-    if (symbol) {
-      if (symbolRef.current === null) {
-        symbolRef.current = symbol
-      } else if (symbol !== symbolRef.current) {
-        if (now - lastTickAtRef.current < SYMBOL_SWITCH_SILENCE_MS) return
-        symbolRef.current = symbol
-        digitHistory.current = []
-        setLastDigits([])
-      }
-    }
-    lastTickAtRef.current = now
-
-    // pip_size real do símbolo (2, 3 ou 4 casas) — mantém zeros finais
-    const priceStr = quote.toFixed(decimalsFromPip(pipSize, 2))
-    const digit = parseInt(priceStr[priceStr.length - 1], 10)
+    const digit = digitOf(quote, pipSize)
     if (Number.isNaN(digit)) return
 
-    digitHistory.current.push(digit)
-    if (digitHistory.current.length > MAX_DIGIT_HISTORY) {
-      digitHistory.current = digitHistory.current.slice(-MAX_DIGIT_HISTORY)
-    }
+    const h = digitHistory.current
+    h.push(digit)
+    if (h.length > MAX_DIGIT_HISTORY) h.splice(0, h.length - MAX_DIGIT_HISTORY)
+
     setLastDigit(digit)
     setLoading(false)
     setTickCount(c => c + 1)
@@ -160,10 +163,7 @@ export function TradingProvider({ children }: { children: ReactNode }) {
       const next = [...prev, digit]
       return next.length > MAX_LAST_STRIP ? next.slice(-MAX_LAST_STRIP) : next
     })
-    const w = selectedTicksRef.current
-    queueMicrotask(() => {
-      setChartData({ barData: computeBarData(digitHistory.current, w), lastDigit: digit })
-    })
+    setChartData({ barData: computeBarData(h, selectedTicksRef.current), lastDigit: digit })
   }, [])
 
   const _setBotStatus = useCallback((s: BotStatusUi) => setBotStatus(s), [])
@@ -191,9 +191,9 @@ export function TradingProvider({ children }: { children: ReactNode }) {
   return (
     <TradingContext.Provider value={{
       balance, profit, wins, losses, currency, lastDigit, chartData,
-      lastDigits, tickCount, isConnected, loading, selectedTicks, setSelectedTicks,
-      trades, clearTrades, botStatus,
-      _setBalance, _setTick, _setBotStatus, _addTrade, _setConnected,
+      lastDigits, tickCount, snapshotVersion, isConnected, loading, selectedTicks, setSelectedTicks,
+      getDigits, trades, clearTrades, botStatus,
+      _setBalance, _setTick, _setTicksSnapshot, _setBotStatus, _addTrade, _setConnected,
     }}>
       {children}
     </TradingContext.Provider>
