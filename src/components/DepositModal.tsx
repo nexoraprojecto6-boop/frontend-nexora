@@ -33,7 +33,7 @@ export function DepositModal({ open, onClose }: DepositModalProps) {
       style={{
         position: 'fixed', inset: 0, zIndex: 10000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--overlay-bg)', backdropFilter: 'blur(6px)',
+        background: 'rgba(7,11,20,0.65)', backdropFilter: 'blur(6px)',
         padding: 16, animation: 'depositFadeIn 0.18s ease',
       }}
     >
@@ -41,13 +41,13 @@ export function DepositModal({ open, onClose }: DepositModalProps) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 360,
-          background: 'var(--modal-bg)',
+          background: 'rgba(18,24,38,0.82)',
           border: '1px solid var(--border)',
           borderRadius: 16,
           padding: 24,
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          boxShadow: 'var(--panel-shadow)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
           position: 'relative',
           animation: 'depositScaleIn 0.2s ease',
         }}
@@ -59,7 +59,7 @@ export function DepositModal({ open, onClose }: DepositModalProps) {
             position: 'absolute', top: 12, right: 12,
             width: 28, height: 28, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--chip-bg)', color: 'var(--text-faint)',
+            background: 'rgba(255,255,255,0.06)', color: 'var(--text-faint)',
             border: 'none', cursor: 'pointer', fontSize: 13,
           }}
         >
