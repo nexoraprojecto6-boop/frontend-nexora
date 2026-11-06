@@ -32,20 +32,16 @@ import { api } from '../lib/api'
 import type { ManualBuyParams } from '../hooks/useNexoraWs'
 
 const HISTORY_LOAD = 1000
-const ANIM_MS       = 300
+// Constante de tempo da suavização: ~140 ms = reage rápido ao tick e flui sem saltos
+const SMOOTH_TAU_MS = 140
 
 const COLOR_HOT     = '#2e7d32'
 const COLOR_COLD    = '#c62828'
 const COLOR_NEUTRAL = '#b8bcc8'
 
+// Mercado único: o mesmo onde os bots operam (Volatility 100 (1s) Index).
 const SYMBOLS = [
-  { value: '1HZ100V', label: 'Vol 100 (1s)' },
-  { value: '1HZ10V',  label: 'Vol 10 (1s)'  },
-  { value: 'R_100',   label: 'Vol 100'       },
-  { value: 'R_75',    label: 'Vol 75'        },
-  { value: 'R_50',    label: 'Vol 50'        },
-  { value: 'R_25',    label: 'Vol 25'        },
-  { value: 'R_10',    label: 'Vol 10'        },
+  { value: '1HZ100V', label: 'Volatility 100 (1s) Index' },
 ]
 const WINDOWS = [25, 50, 100, 250, 500, 1000]
 const DURATIONS = [1, 2, 3, 5, 10]
@@ -98,7 +94,7 @@ const fieldStyle: React.CSSProperties = {
 
 function OperarManualInner() {
   const navigate = useNavigate()
-  const { manualBuy, manualPendingTrade, manualBuyError, manualTrades, subscribeTicks, availableSymbols } = useBots()
+  const { manualBuy, manualPendingTrade, manualBuyError, manualTrades, subscribeTicks } = useBots()
   const {
     balance, currency, profit, wins, losses, loading: tradingLoading,
     tickCount, snapshotVersion, getDigits, isConnected,
@@ -165,38 +161,46 @@ function OperarManualInner() {
 
   // ── Estado do gráfico / dígitos (dados do TradingContext) ───
   const [symbol, setSymbol] = useState('1HZ100V')
-  const [win, setWin] = useState(25)
+  const [win, setWin] = useState(100)
   const [switching, setSwitching] = useState(false)   // à espera do snapshot do novo mercado
-  const [info, setInfo] = useState(() => calcAll([], 25))
+  const [info, setInfo] = useState(() => calcAll([], 100))
   const [bars, setBars] = useState<number[]>(Array(10).fill(0))
   const [winOpen, setWinOpen] = useState(false)
 
   const target = useRef<number[]>(Array(10).fill(0))
   const current = useRef<number[]>(Array(10).fill(0))
   const animating = useRef(false)
-  const animStart = useRef<number[]>(Array(10).fill(0))
-  const animT0 = useRef(0)
   const mounted = useRef(true)
   const snapRef = useRef(-1)
   const waitSnapRef = useRef<number | null>(null)
   const snapshotVersionRef = useRef(snapshotVersion)
   snapshotVersionRef.current = snapshotVersion
 
+  // Animação contínua (suavização exponencial por tempo): cada barra persegue o
+  // alvo a cada frame, sem degraus e sem reiniciar quando chega um tick novo.
+  const lastFrame = useRef(0)
   const startRaf = useCallback(() => {
-    animStart.current = [...current.current]
-    animT0.current = performance.now()
     if (animating.current) return
     animating.current = true
-    const tick = (now: number) => {
+    lastFrame.current = performance.now()
+    const step = (now: number) => {
       if (!mounted.current) { animating.current = false; return }
-      const p = Math.min(1, (now - animT0.current) / ANIM_MS)
-      const s = animStart.current, t = target.current, c = current.current
-      for (let i = 0; i < 10; i++) c[i] = s[i] + (t[i] - s[i]) * p
+      const dt = Math.min(64, now - lastFrame.current)
+      lastFrame.current = now
+      const k = 1 - Math.exp(-dt / SMOOTH_TAU_MS)
+      const t = target.current, c = current.current
+      let maxDiff = 0
+      for (let i = 0; i < 10; i++) {
+        c[i] += (t[i] - c[i]) * k
+        const d = Math.abs(t[i] - c[i])
+        if (d > maxDiff) maxDiff = d
+      }
+      if (maxDiff < 0.02) { for (let i = 0; i < 10; i++) c[i] = t[i] }
       setBars([...c])
-      if (p < 1) requestAnimationFrame(tick)
+      if (maxDiff >= 0.02) requestAnimationFrame(step)
       else animating.current = false
     }
-    requestAnimationFrame(tick)
+    requestAnimationFrame(step)
   }, [])
 
   const applyPcts = useCallback((pcts: number[], snap = false) => {
@@ -236,8 +240,8 @@ function OperarManualInner() {
     }
     const h = getDigits()
     if (h.length === 0) return
-    const snap = snapRef.current !== snapshotVersion
     snapRef.current = snapshotVersion
+    const snap = current.current.every(v => v === 0)
     const all = calcAll(h, win)
     applyPcts(all.pcts, snap)
     setInfo(all)
@@ -247,16 +251,7 @@ function OperarManualInner() {
   const phase: 'connecting' | 'loading' | 'live' =
     switching ? 'loading' : info.total > 0 ? 'live' : isConnected ? 'loading' : 'connecting'
 
-  // Lista de mercados: a da conta (backend) quando disponível; senão a fixa.
-  const symbolOptions = (() => {
-    const open = availableSymbols.filter(s => s.isOpen)
-    const synth = open.filter(s => s.market === 'synthetic_index')
-    const list = synth.length ? synth : open
-    const opts = list.map(s => ({ value: s.symbol, label: s.name || s.symbol }))
-    if (!opts.length) return SYMBOLS
-    if (!opts.some(o => o.value === symbol)) opts.unshift({ value: symbol, label: SYMBOLS.find(x => x.value === symbol)?.label ?? symbol })
-    return opts
-  })()
+  const symbolOptions = SYMBOLS
 
   // ── Estado do painel de operação ─────────────────────────────
   const [market, setMarket] = useState<MarketType>('over')

@@ -10,7 +10,8 @@ import { useNavigate } from 'react-router-dom'
 import { IoChevronDown, IoChevronUp, IoTrendingUp } from 'react-icons/io5'
 import { useTrading } from '../context/TradingContext'
 
-const ANIM_MS = 120
+// Constante de tempo da suavização: ~140 ms = reage rápido ao tick e flui sem saltos
+const SMOOTH_TAU_MS = 140
 
 const COLOR_HOT     = '#2e7d32'
 const COLOR_COLD    = '#c62828'
@@ -44,33 +45,39 @@ export function ChartSection() {
   const navigate = useNavigate()
   const { tickCount, snapshotVersion, getDigits, isConnected } = useTrading()
 
-  const [win,     setWin]     = useState(25)
-  const [info,    setInfo]    = useState(() => calcAll([], 25))
+  const [win,     setWin]     = useState(100)
+  const [info,    setInfo]    = useState(() => calcAll([], 100))
   const [bars,    setBars]    = useState<number[]>(Array(10).fill(0))
   const [winOpen, setWinOpen] = useState(false)
 
   const target    = useRef<number[]>(Array(10).fill(0))
   const current   = useRef<number[]>(Array(10).fill(0))
   const animating = useRef(false)
-  const animStart = useRef<number[]>(Array(10).fill(0))
-  const animT0    = useRef(0)
   const mounted   = useRef(true)
   const snapRef   = useRef(-1)
 
+  // Animação contínua (suavização exponencial por tempo): cada barra persegue o
+  // alvo a cada frame, sem degraus e sem reiniciar quando chega um tick novo.
+  const lastFrame = useRef(0)
   const startRaf = useCallback(() => {
-    animStart.current = [...current.current]
-    animT0.current = performance.now()
     if (animating.current) return
     animating.current = true
+    lastFrame.current = performance.now()
     const step = (now: number) => {
       if (!mounted.current) { animating.current = false; return }
-      const p = Math.min(1, (now - animT0.current) / ANIM_MS)
-      const s = animStart.current
-      const t = target.current
-      const c = current.current
-      for (let i = 0; i < 10; i++) c[i] = s[i] + (t[i] - s[i]) * p
+      const dt = Math.min(64, now - lastFrame.current)
+      lastFrame.current = now
+      const k = 1 - Math.exp(-dt / SMOOTH_TAU_MS)
+      const t = target.current, c = current.current
+      let maxDiff = 0
+      for (let i = 0; i < 10; i++) {
+        c[i] += (t[i] - c[i]) * k
+        const d = Math.abs(t[i] - c[i])
+        if (d > maxDiff) maxDiff = d
+      }
+      if (maxDiff < 0.02) { for (let i = 0; i < 10; i++) c[i] = t[i] }
       setBars([...c])
-      if (p < 1) requestAnimationFrame(step)
+      if (maxDiff >= 0.02) requestAnimationFrame(step)
       else animating.current = false
     }
     requestAnimationFrame(step)
@@ -91,8 +98,8 @@ export function ChartSection() {
   useEffect(() => {
     const hist = getDigits()
     if (hist.length === 0) return
-    const snap = snapRef.current !== snapshotVersion
     snapRef.current = snapshotVersion
+    const snap = current.current.every(v => v === 0)
     applyPcts(calcPcts(hist, win), snap)
     setInfo(calcAll(hist, win))
   }, [tickCount, snapshotVersion, win, getDigits, applyPcts])
