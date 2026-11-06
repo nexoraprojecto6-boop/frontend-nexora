@@ -36,6 +36,40 @@ function readStoredLocalUser(): LocalUser | null {
   }
 }
 
+// ── Sessão Deriv guardada por utilizador ──────────────────────
+// Ao sair (logout) a sessão Deriv é GUARDADA em `derivSession_<id do utilizador>`
+// e retirada das chaves ativas (token / currentAccountId); ao entrar de novo,
+// o mesmo utilizador recupera-a e vai direto ao dashboard, sem voltar a
+// ligar à Deriv. Outro utilizador no mesmo browser nunca a recebe.
+const derivSessionKey = (userId: string) => `derivSession_${userId}`
+
+function stashDerivSession(userId: string | undefined): void {
+  try {
+    const token = localStorage.getItem('token')
+    if (!userId || !token) return
+    localStorage.setItem(derivSessionKey(userId), JSON.stringify({
+      token,
+      accountId: localStorage.getItem('currentAccountId'),
+      savedAt: Date.now(),
+    }))
+  } catch { /* sem localStorage: apenas não guarda */ }
+}
+
+/** Repõe a sessão Deriv guardada deste utilizador. Devolve o token, ou null. */
+function restoreDerivSession(userId: string): string | null {
+  try {
+    const raw = localStorage.getItem(derivSessionKey(userId))
+    if (!raw) return null
+    const saved = JSON.parse(raw) as { token?: string; accountId?: string | null }
+    if (!saved.token) return null
+    localStorage.setItem('token', saved.token)
+    if (saved.accountId) localStorage.setItem('currentAccountId', saved.accountId)
+    return saved.token
+  } catch {
+    return null
+  }
+}
+
 function hasStoredLocalToken(): boolean {
   return !!localStorage.getItem('localToken')
 }
@@ -112,9 +146,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginLocal = useCallback((token: string, user: LocalUser) => {
     localStorage.setItem('localToken', token)
     localStorage.setItem('localUser', JSON.stringify(user))
+
+    // Já ligou à Deriv antes? Recupera a sessão: não passa pelo ecrã de ligar.
+    // (`login` valida o token; se tiver expirado, loadAccounts limpa-o e o
+    // fluxo normal pede para ligar de novo.)
+    if (!localStorage.getItem('token')) {
+      const derivToken = restoreDerivSession(user.id)
+      if (derivToken) {
+        login(derivToken).then((ok) => {
+          if (!ok) localStorage.removeItem(derivSessionKey(user.id))
+        })
+      }
+    }
+
     setLocalUser(user)
     setIsLocalAuthenticated(true)
-  }, [])
+  }, [login])
 
   const logoutLocal = useCallback(() => {
     localStorage.removeItem('localToken')
@@ -157,6 +204,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
+    // Guarda a sessão Deriv deste utilizador ANTES de limpar o resto, para
+    // que ao entrar de novo não tenha de voltar a ligar à Deriv.
+    stashDerivSession(localUser?.id ?? readStoredLocalUser()?.id)
     // Se o servidor estiver em baixo, o logout NÃO pode falhar: antes, uma
     // exceção em api.logout() deixava o utilizador preso (sessão nunca limpa).
     try {

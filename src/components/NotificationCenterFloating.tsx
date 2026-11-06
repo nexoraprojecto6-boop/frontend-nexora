@@ -111,17 +111,17 @@ export default function NotificationCenterFloating({
               position: 'relative', width: '100%', maxWidth: 420, maxHeight: '70vh',
               display: 'flex', flexDirection: 'column',
               borderRadius: 0,
-              border: '1px solid rgba(255,255,255,0.12)',
-              background: 'rgba(14,16,19,0.72)',
+              border: '1px solid var(--glass-line)',
+              background: 'var(--panel-bg)',
               backdropFilter: 'blur(28px) saturate(180%)',
               WebkitBackdropFilter: 'blur(28px) saturate(180%)',
-              boxShadow: '0 30px 80px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+              boxShadow: 'var(--panel-shadow)',
               overflow: 'hidden',
             }}
           >
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '18px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+              padding: '18px 20px', borderBottom: '1px solid var(--glass-line-soft)',
             }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--white)' }}>Notificações</h2>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -151,7 +151,7 @@ export default function NotificationCenterFloating({
                     onClick={() => onNotificationClick?.(n)}
                     style={{
                       width: '100%', textAlign: 'left', padding: '14px 20px',
-                      borderBottom: '1px solid rgba(255,255,255,0.06)',
+                      borderBottom: '1px solid var(--glass-line-soft)',
                       background: n.read ? 'transparent' : 'rgba(118,131,255,0.08)',
                       display: 'flex', gap: 12, alignItems: 'flex-start',
                     }}

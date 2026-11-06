@@ -15,7 +15,7 @@ const SMOOTH_TAU_MS = 140
 
 const COLOR_HOT     = '#2e7d32'
 const COLOR_COLD    = '#c62828'
-const COLOR_NEUTRAL = '#b8bcc8'
+const COLOR_NEUTRAL = 'var(--bar-neutral)'
 
 const WINDOWS = [25, 50, 100, 250, 500, 1000]
 
@@ -149,7 +149,7 @@ export function ChartSection() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 'clamp(11px, 3.2vw, 15px)', whiteSpace: 'nowrap' }}>
+          <span style={{ color: 'var(--text)', fontSize: 'clamp(11px, 3.2vw, 15px)', whiteSpace: 'nowrap' }}>
             {loading ? (isConnected ? '...' : 'offline') : <><span className="tabular">{Math.min(info.total, win)}</span> ticks</>}
           </span>
           <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -157,7 +157,7 @@ export function ChartSection() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 32, height: 32,
               background: 'transparent', border: 'none',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
+              cursor: 'pointer', color: 'var(--text-dim)',
             }}>
               {winOpen ? <IoChevronUp size={16} /> : <IoChevronDown size={16} />}
             </button>
@@ -196,7 +196,7 @@ export function ChartSection() {
             }}>
               <span className="tabular" style={{
                 fontSize: 'clamp(8px, 2.4vw, 11.5px)', fontWeight: 500, letterSpacing: '-0.05em',
-                color: 'rgba(255,255,255,0.92)', lineHeight: 1, minHeight: 14, whiteSpace: 'nowrap',
+                color: 'var(--text)', lineHeight: 1, minHeight: 14, whiteSpace: 'nowrap',
               }}>
                 {pct.toFixed(1)}%
               </span>

@@ -238,7 +238,9 @@ export const api = {
     } catch (e) {
       console.error('[API] Logout error:', e)
     } finally {
-      localStorage.clear()
+      // Não usar localStorage.clear(): apagava também os termos aceites, a
+      // preferência de som e a sessão Deriv guardada. O AuthContext remove
+      // só as chaves da sessão ativa.
       sessionStorage.clear()
     }
   },

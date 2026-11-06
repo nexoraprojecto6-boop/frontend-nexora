@@ -25,13 +25,13 @@ function Portal({ children }: { children: React.ReactNode }) {
 // Altura/tamanhos fluidos dos botões da grelha de controlo
 const CTRL_H = 'clamp(40px, 10.5vw, 46px)'
 const CTRL_LABEL: React.CSSProperties = {
-  color: '#e5e5ea', fontSize: 'clamp(11px, 3vw, 13px)', marginBottom: 6, fontWeight: 500,
+  color: 'var(--text)', fontSize: 'clamp(11px, 3vw, 13px)', marginBottom: 6, fontWeight: 500,
   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
 }
 const CTRL_ICON_BOX: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   width: 'clamp(22px, 6vw, 30px)', height: 'clamp(22px, 6vw, 30px)', borderRadius: 4,
-  background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)',
+  background: 'var(--chip-bg)', color: 'var(--text-dim)',
 }
 
 // ── Input numérico controlado por texto local ──────────────────

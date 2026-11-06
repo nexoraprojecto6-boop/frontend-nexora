@@ -12,7 +12,7 @@ type MainTab = 'trader' | 'notificacoes'
 const COLS = '0.85fr 1.3fr 1.15fr 0.85fr 1.05fr'
 
 // Cor da linha — bloco arredondado, igual à imagem
-const ROW_BG = '#1b1b1f'
+const ROW_BG = 'var(--row-bg)'
 
 // Célula: nunca quebra linha (nowrap + ellipsis) para que uma
 // hora/tick/preço mais comprido nunca estique a linha nem desalinhe a grelha.
@@ -125,13 +125,13 @@ export function TradesTable() {
                     background: ROW_BG, borderRadius: 10, padding: '10px 8px',
                     fontSize: 'clamp(10.5px, 2.8vw, 12.5px)',
                   }}>
-                    <span className="tabular" style={{ ...cellBase, color: '#fff' }}>{t.hora}</span>
-                    <span style={{ ...cellBase, color: '#fff', fontWeight: 600 }}>{t.contractType ?? '—'}</span>
-                    <span className="tabular" style={{ ...cellBase, color: '#fff', textAlign: 'right' }} title={formatTick(t)}>
+                    <span className="tabular" style={{ ...cellBase, color: 'var(--white)' }}>{t.hora}</span>
+                    <span style={{ ...cellBase, color: 'var(--white)', fontWeight: 600 }}>{t.contractType ?? '—'}</span>
+                    <span className="tabular" style={{ ...cellBase, color: 'var(--white)', textAlign: 'right' }} title={formatTick(t)}>
                       {formatTick(t)}
                     </span>
-                    <span className="tabular" style={{ ...cellBase, color: '#fff', textAlign: 'right' }}>{t.stake.toFixed(dec)}</span>
-                    <span className="tabular" style={{ ...cellBase, textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? '#22c55e' : 'var(--red-hi)' }}>
+                    <span className="tabular" style={{ ...cellBase, color: 'var(--white)', textAlign: 'right' }}>{t.stake.toFixed(dec)}</span>
+                    <span className="tabular" style={{ ...cellBase, textAlign: 'right', fontWeight: 700, color: t.profit >= 0 ? 'var(--green)' : 'var(--red-hi)' }}>
                       {Math.abs(t.profit).toFixed(dec)}
                     </span>
                   </div>

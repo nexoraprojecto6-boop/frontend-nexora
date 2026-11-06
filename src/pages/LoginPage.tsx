@@ -82,7 +82,8 @@ export default function LoginPage() {
   useEffect(() => {
     if (isLocalLoading || !isLocalAuthenticated) return
     if (termsAlreadyAccepted()) {
-      navigate('/connect-deriv', { replace: true })
+      // Sessão Deriv ativa (ou recuperada no login) → direto ao dashboard.
+      navigate(localStorage.getItem('token') ? '/dashboard' : '/connect-deriv', { replace: true })
     } else {
       setShowTerms(true)
     }
@@ -123,7 +124,7 @@ export default function LoginPage() {
   const handleAcceptTerms = () => {
     try { localStorage.setItem(TERMS_ACCEPTED_KEY, '1') } catch { /* ignora */ }
     setShowTerms(false)
-    navigate('/connect-deriv', { replace: true })
+    navigate(localStorage.getItem('token') ? '/dashboard' : '/connect-deriv', { replace: true })
   }
 
   const handleDeclineTerms = () => {

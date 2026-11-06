@@ -24,7 +24,7 @@ function BrandMark({ size = 40 }: { size?: number }) {
 export default function ConnectDerivPage() {
   const navigate = useNavigate()
   const { show } = useLoader()
-  const { isLocalAuthenticated, isLocalLoading, isAuthenticated } = useAuth()
+  const { isLocalAuthenticated, isLocalLoading, isAuthenticated, isLoading: derivLoading } = useAuth()
   const [isConnecting, setIsConnecting] = useState(false)
 
   useEffect(() => {
@@ -36,6 +36,9 @@ export default function ConnectDerivPage() {
       navigate('/dashboard')
     }
   }, [isLocalLoading, isLocalAuthenticated, isAuthenticated])
+
+  // A validar uma sessão Deriv existente: não piscar o ecrã de ligar.
+  if (derivLoading) return <div style={pageStyle}><div style={bgStyle} /></div>
 
   const handleConnect = async () => {
     setIsConnecting(true)

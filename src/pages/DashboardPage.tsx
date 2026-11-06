@@ -33,7 +33,7 @@ function DashboardLoader() {
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: 20,
-      background: 'rgba(11,13,18,0.97)',
+      background: 'var(--loader-bg)',
     }}>
       <h1 className="logo-text" style={{ fontSize: 20 }}>NEXORA FOREX</h1>
       <div style={{ position: 'relative', width: 56, height: 56 }}>
@@ -67,6 +67,13 @@ function DashboardInner() {
   const [notifOpen, setNotifOpen] = useState(false)
   const [depositOpen, setDepositOpen] = useState(false)
 
+  // Tema "água": fundo aqua + vidro branco, só enquanto o dashboard está aberto.
+  // (classe no <body> para os modais/portais herdarem as mesmas cores)
+  useEffect(() => {
+    document.body.classList.add('theme-aqua')
+    return () => document.body.classList.remove('theme-aqua')
+  }, [])
+
   // Sem sessão Deriv não há dashboard. Quem já entrou com email/senha
   // vai direto para ligar a Deriv (sem passar pelo ecrã de entrada), e
   // `replace` evita que o botão "voltar" prenda o utilizador num ciclo.
@@ -88,7 +95,7 @@ function DashboardInner() {
       <NotificationBar />
 
       {/* ── Header ── */}
-      <header style={{
+      <header className="dash-header" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: 'calc(10px + env(safe-area-inset-top, 0px)) 16px 10px',
         background: 'var(--bg-elevated)',
