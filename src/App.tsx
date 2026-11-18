@@ -3,9 +3,9 @@
 //
 // Providers globais (Auth, Trading, Loader) ficam aqui.
 // BotsProvider NÃO está aqui para as rotas gerais — cada página
-// que precisa dele (Dashboard, OperarManual) monta o seu próprio
-// <BotsProvider/> internamente. Isso evita que o WebSocket abra
-// antes do login e evita dois BotsProvider aninhados na mesma
+// que precisa dele (Dashboard, OperarManual, Negociar) monta o seu
+// próprio <BotsProvider/> internamente. Isso evita que o WebSocket
+// abra antes do login e evita dois BotsProvider aninhados na mesma
 // árvore, que abriam DUAS ligações WS para a mesma conta e
 // entravam num ciclo de reconexão infinito ("sessão duplicada").
 //
@@ -25,6 +25,7 @@ import MenuPage from './pages/MenuPage'
 import AdminPage from './pages/AdminPage'
 import VideoLessonsPage from './pages/VideoLessonsPage'
 import OperarManualPage from './pages/OperarManualPage'
+import ManualTradePage from './pages/ManualTradePage'
 
 export default function App() {
   return (
@@ -44,6 +45,9 @@ export default function App() {
               {/* OperarManualPage já monta o seu próprio <BotsProvider/>
                   internamente — NÃO envolver aqui outra vez. */}
               <Route path="/operar-manual" element={<OperarManualPage />} />
+              {/* Painel estilo DTrader (Rise/Fall, Touch, Accumulators).
+                  Também monta o seu próprio <BotsProvider/>. */}
+              <Route path="/negociar" element={<ManualTradePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </TradingProvider>
