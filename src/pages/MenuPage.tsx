@@ -4,7 +4,7 @@ import {
   IoChevronBack, IoChevronDown, IoGridOutline, IoHardwareChipOutline, IoPersonAddOutline,
   IoSchoolOutline, IoLogoWhatsapp, IoHeadsetOutline, IoVolumeHighOutline, IoVolumeMuteOutline,
   IoNotificationsOutline, IoDocumentTextOutline, IoLogOutOutline, IoShieldCheckmarkOutline,
-  IoPersonOutline, IoPulseOutline, IoOpenOutline,
+  IoPersonOutline, IoPulseOutline, IoOpenOutline, IoTrendingUp,
 } from 'react-icons/io5'
 import { useAuth } from '../context/AuthContext'
 import { useLoader } from '../context/LoaderContext'
@@ -237,6 +237,9 @@ export default function MenuPage() {
           <MenuItem onClick={() => { show('A carregar...'); navigate('/dashboard') }}
             icon={<IoHardwareChipOutline size={ICON} />}
             label="OPERAR COM ROBÔS" color="var(--green)" />
+          <MenuItem onClick={() => { show('A carregar...'); navigate('/negociar') }}
+            icon={<IoTrendingUp size={ICON} />}
+            label="OPERAR MANUAL" color="var(--green)" />
           <MenuItem
             href={`https://hub.deriv.com/tradershub/signup?t=hCp-xUFsKsktJe5FDKcTD2Nd7ZgqdRLk&utm_campaign=NEXORA&utm_medium=affiliate&utm_source=hCp-xUFsKsktJe5FDKcTD2Nd7ZgqdRLk`}
             external icon={<IoPersonAddOutline size={ICON} />}
