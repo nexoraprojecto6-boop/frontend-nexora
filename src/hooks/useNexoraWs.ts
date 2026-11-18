@@ -6,6 +6,11 @@
 // e `manual_trade_closed` (resultado final do contrato manual).
 // Segue exatamente o mesmo padrão dos eventos `bot:*` já existentes.
 //
+// ALTERAÇÃO (Operar Manual · painel DTrader): contractType aceita
+// ONETOUCH / NOTOUCH / ACCU (+ growthRate, takeProfit); todas as
+// mensagens `manual_*` são também reencaminhadas para `onManualMessage`;
+// o hook expõe `sendRaw` para pedidos manual_proposal / manual_sell.
+//
 // ALTERAÇÕES (compatibilidade com o backend v2):
 //   • AUTH_TEMPORARY (Deriv/rede em baixo) já NÃO termina a sessão —
 //     só AUTH_FAILED (token inválido) o faz. Antes, qualquer falha
@@ -43,11 +48,17 @@ import { WS_URL } from '../lib/env'
 
 export interface ManualBuyParams {
   symbol: string
-  contractType: 'DIGITOVER' | 'DIGITUNDER' | 'DIGITMATCH' | 'DIGITDIFF' | 'CALL' | 'PUT'
-  duration: number
-  durationUnit: 'ticks' | 's' | 'm'
+  contractType:
+    | 'DIGITOVER' | 'DIGITUNDER' | 'DIGITMATCH' | 'DIGITDIFF'
+    | 'CALL' | 'PUT' | 'ONETOUCH' | 'NOTOUCH' | 'ACCU'
+  duration?: number
+  durationUnit?: 'ticks' | 's' | 'm'
   stake: number
   barrier?: number | string
+  /** Accumulators: taxa de crescimento (0.01 – 0.05). */
+  growthRate?: number
+  /** Accumulators: take profit opcional. */
+  takeProfit?: number
   /** Preenchido pelo BotsContext; o servidor devolve-o em todas as respostas. */
   clientRef?: string
 }
@@ -102,6 +113,8 @@ interface NexoraWsCallbacks {
   onManualBuyResult?: (result: ManualBuyResult) => void
   onManualTradeClosed?: (trade: ManualTradeClosed) => void
   onManualTradeError?: (err: ManualTradeError) => void
+  /** Recebe TODAS as mensagens manual_* (painel Operar Manual / DTrader). */
+  onManualMessage?: (type: string, payload: Record<string, unknown>) => void
   onSymbolFallback?: (info: SymbolFallbackInfo) => void
   onDerivStatus?: (connected: boolean) => void
   token?: string | null
@@ -187,6 +200,9 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
     const payload = (msg.payload && typeof msg.payload === 'object'
       ? msg.payload
       : msg) as Record<string, unknown>
+
+    // Painel Operar Manual: recebe todas as mensagens manual_*
+    if (type.startsWith('manual_')) cbRef.current.onManualMessage?.(type, payload)
 
     try {
       switch (type) {
@@ -330,7 +346,7 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
             const botId = typeof payload.botId === 'string' ? payload.botId
               : typeof msg.botId === 'string' ? msg.botId : ''
             cbRef.current.onBotEvent?.({ type: type as BotEventType, botId, payload })
-          } else {
+          } else if (!type.startsWith('manual_')) {
             console.debug('[NexoraWS] mensagem não tratada:', type, payload)
           }
       }
@@ -481,6 +497,8 @@ export function useNexoraWs(callbacks: NexoraWsCallbacks = {}) {
 
   return {
     wsStatus,
+    /** Envio genérico (usado pelo painel Operar Manual: manual_proposal, manual_buy, manual_sell). */
+    sendRaw: send,
     // ── Gráfico / mercados (dados da sessão, via backend) ───────
     // Guarda o pedido e envia já se autenticado; após reconexão/troca de
     // conta é reenviado em 'authenticated'.
