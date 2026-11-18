@@ -3,7 +3,7 @@
 // O BotsContext alimenta-o (ver PATCHES.md). Não abre WebSocket próprio.
 // ============================================================
 import { useSyncExternalStore } from 'react'
-import type { MarketSymbol } from '../hooks/useNexoraWs'
+import type { MarketSymbol, ManualBuyParams } from '../hooks/useNexoraWs'
 
 export type ContractType = 'CALL' | 'PUT' | 'ONETOUCH' | 'NOTOUCH' | 'ACCU'
 export interface Quote { ask: number; payout: number; error?: string }
@@ -25,6 +25,8 @@ interface State {
 type Api = {
   send: (type: string, payload?: Record<string, unknown>) => boolean
   subscribeTicks: (symbol: string, count?: number) => void
+  /** Compra via BotsContext (regista stake/tipo para o histórico e o som de ganho). */
+  buy: (p: ManualBuyParams) => boolean
 }
 
 const MAX_PRICES = 300
@@ -65,11 +67,15 @@ export const manual = {
   },
   buy(type: ContractType, p: TradeParams) {
     const ref = uid()
-    const ok = api?.send('manual_buy', { symbol: s.symbol, contractType: type, clientRef: ref, ...p })
+    const ok = api?.buy({ symbol: s.symbol, contractType: type, clientRef: ref, ...p })
     if (!ok) return set({ error: 'Sem ligação ao servidor. A reconectar…' })
     set({ error: null, open: [...s.open, { ref, type, symbol: s.symbol, stake: p.stake, status: 'buying' }] })
   },
   sell(contractId: string) { api?.send('manual_sell', { contractId }) },
+  /** Ligação caiu: o servidor deixa de acompanhar os contratos em curso. */
+  dropOpen() {
+    if (s.open.length) set({ open: [], error: 'Ligação perdida. Confirme o resultado na Deriv.' })
+  },
 
   /** Recebe todas as mensagens manual_* do useNexoraWs. */
   handle(type: string, p: Record<string, unknown>) {
