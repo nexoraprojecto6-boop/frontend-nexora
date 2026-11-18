@@ -8,6 +8,12 @@
 // CORREÇÃO (Operar Manual): os trades manuais agora entram
 // também no array `trades` (o mesmo que a <TradesTable/> lê).
 //
+// ALTERAÇÃO (painel DTrader · /negociar): o BotsContext alimenta o
+// `manualStore` (preços, mercados, mensagens manual_*) e regista nele
+// o envio/compra, sem abrir nenhuma ligação nova. A compra do painel
+// passa por `manualBuyWrapped`, por isso entra no histórico e toca o
+// som de ganho como as outras compras manuais.
+//
 // ALTERAÇÕES (compatibilidade com o backend v2):
 //   • Compras manuais ligadas por `clientRef`: várias compras seguidas já
 //     não trocam contractType/stake entre si (antes havia UM só "último
@@ -35,6 +41,7 @@ import { useTrading } from './TradingContext'
 import type { Trade } from './TradingContext'
 import { playGainSound } from '../lib/sound'
 import { formatMoney } from '../lib/money'
+import { manual } from '../manual/manualStore'
 
 export interface TradeRecord {
   id: string
@@ -91,7 +98,8 @@ interface BotsCtx {
   adminAddCatalogBot: (dto: { name: string; description: string; strategy: BotStrategyType; defaultConfig: BotConfig; tags?: string[]; isActive?: boolean }) => void
   adminRemoveCatalogBot: (id: string) => void
   adminUpdateCatalogBot: (id: string, updates: Record<string, unknown>) => void
-  manualBuy: (params: ManualBuyParams) => void
+  /** Devolve false se não havia ligação (o erro já é mostrado no ecrã). */
+  manualBuy: (params: ManualBuyParams) => boolean
   manualPendingTrade: ManualTradeRecord | null
   manualTrades: ManualTradeRecord[]
   manualBuyError: string | null
@@ -193,14 +201,19 @@ export function BotsProvider({ children }: { children: ReactNode }) {
 
   const handleTick = useCallback((quote: number, pipSize?: number, symbol?: string) => {
     trading._setTick(quote, pipSize, symbol)
+    manual.pushTick(quote, pipSize, symbol)
   }, [trading._setTick])
 
   const handleTicksSnapshot = useCallback((symbol: string, prices: number[], pipSize?: number) => {
     trading._setTicksSnapshot(symbol, prices, pipSize)
+    manual.setSnapshot(symbol, prices, pipSize)
   }, [trading._setTicksSnapshot])
 
   const [availableSymbols, setAvailableSymbols] = useState<MarketSymbol[]>([])
-  const handleAvailableSymbols = useCallback((list: MarketSymbol[]) => setAvailableSymbols(list), [])
+  const handleAvailableSymbols = useCallback((list: MarketSymbol[]) => {
+    setAvailableSymbols(list)
+    manual.setSymbols(list)
+  }, [])
 
   // ── Handlers de compra manual ──────────────────────────────
   const takeParamsByRef = (clientRef?: string): ManualBuyParams | null => {
@@ -421,16 +434,17 @@ export function BotsProvider({ children }: { children: ReactNode }) {
     onTicksSnapshot: handleTicksSnapshot, onAvailableSymbols: handleAvailableSymbols,
     onManualBuyResult: handleManualBuyResult, onManualTradeClosed: handleManualTradeClosed,
     onManualTradeError: handleManualTradeError,
+    onManualMessage: manual.handle,
     onSymbolFallback: handleSymbolFallback, onDerivStatus: handleDerivStatus,
     token, accountId,
   })
 
-  // ── Compra manual: gera um clientRef, guarda os parâmetros
-  // (contractType, stake) e envia. O servidor devolve o clientRef em
-  // todas as respostas, por isso cada compra fica ligada aos SEUS dados
-  // mesmo com várias seguidas. ─────────────────────────────────────
-  const manualBuyWrapped = useCallback((params: ManualBuyParams) => {
-    const clientRef = `m_${Date.now().toString(36)}_${(manualSeqRef.current++).toString(36)}`
+  // ── Compra manual: gera um clientRef (ou usa o que vem de fora, como
+  // o painel /negociar), guarda os parâmetros (contractType, stake) e
+  // envia. O servidor devolve o clientRef em todas as respostas, por isso
+  // cada compra fica ligada aos SEUS dados mesmo com várias seguidas. ──
+  const manualBuyWrapped = useCallback((params: ManualBuyParams): boolean => {
+    const clientRef = params.clientRef ?? `m_${Date.now().toString(36)}_${(manualSeqRef.current++).toString(36)}`
     manualByRefRef.current.set(clientRef, params)
     lastManualParamsRef.current = params
     const sent = ws.manualBuy({ ...params, clientRef })
@@ -438,6 +452,7 @@ export function BotsProvider({ children }: { children: ReactNode }) {
       manualByRefRef.current.delete(clientRef)
       showManualError('Sem ligação ao servidor. Tente novamente dentro de instantes.')
     }
+    return sent
   }, [ws.manualBuy, showManualError])
 
   useEffect(() => { trading._setConnected(ws.wsStatus === 'connected') }, [ws.wsStatus]) // eslint-disable-line
@@ -445,6 +460,12 @@ export function BotsProvider({ children }: { children: ReactNode }) {
   // Gráfico: mercado por defeito. subscribeTicks é estável (useCallback) —
   // se deixar de o ser, isto re-subscreve em loop.
   useEffect(() => { ws.subscribeTicks(CHART_SYMBOL, 1000) }, [ws.subscribeTicks])
+
+  // Painel /negociar: liga o manualStore a esta ligação. TEM de ficar DEPOIS
+  // do efeito acima — se o painel já pediu outro mercado, é este que fica ativo.
+  useEffect(() => {
+    manual.attach({ send: ws.sendRaw, subscribeTicks: ws.subscribeTicks, buy: manualBuyWrapped })
+  }, [ws.sendRaw, ws.subscribeTicks, manualBuyWrapped])
 
   // Ligação ao servidor caiu: o servidor deixa de acompanhar os contratos
   // manuais em curso (o resultado já não chega). Não deixa o ecrã preso.
@@ -454,6 +475,7 @@ export function BotsProvider({ children }: { children: ReactNode }) {
     manualByContractRef.current.clear()
     manualByRefRef.current.clear()
     setManualPendingTrade(null)
+    manual.dropOpen()
     showStatusMessage('Ligação perdida durante uma compra manual. Confirme o resultado na Deriv.', 'warning')
   }, [ws.wsStatus, showStatusMessage])
 
